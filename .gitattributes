@@ -1,0 +1,2 @@
+# Store text with LF line endings whatever platform wrote it (the tool writes CRLF on Windows).
+* text=auto
