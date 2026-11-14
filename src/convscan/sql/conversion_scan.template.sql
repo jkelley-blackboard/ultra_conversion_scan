@@ -326,7 +326,8 @@ order by partial_credit_questions desc;
 --        real_partial   : true when any answer is worth more than 0% and less than 100%: these
 --                         are the questions conversion damages
 --        weights_found  : 0 means the type gives proportional credit (Matching, Jumbled
---                         Sentence, Ordering, Fill in the Blank Plus, Calculated): no weight per
+--                         Sentence, Fill in the Blank Plus, Calculated, and Ordering, which
+--                         Ultra removes on conversion, see S5d): no weight per
 --                         answer, the switch is the whole setting. scoring_note says so. Check on
 --                         a test conversion whether that switch survives.
 --      On demo (2026-11-13): 1,268 switched-on questions in live tests, 310 with real partial
@@ -401,6 +402,72 @@ join qti_asi_data qq on qq.pk1 = q.question_pk
 join qx              on qx.question_pk = q.question_pk
 left join per_q p    on p.question_pk = q.question_pk
 order by t.course_id, real_partial desc, t.test_title, qq.position;
+
+
+-- S5d. Question types in every test, including questions drawn through random blocks and question
+--      sets. Ultra removes four types on conversion: File Response (File Upload, code 10), Opinion
+--      Scale/Likert (15), Ordering (4) and Quiz Bowl (14), per Blackboard's help (Course Preview,
+--      "Unsupported question types", read 2026-11-14). Codes mapped from the question XML on demo.
+with scope as ({SCOPE}),
+tests as (
+  select s.course_id, gm.pk1 as col_pk, gm.title as test_title, gm.qti_asi_data_pk1 as asmt_pk
+  from scope s
+  join gradebook_main gm on gm.crsmain_pk1 = s.crs_pk and gm.qti_asi_data_pk1 is not null
+                        and coalesce(gm.deleted_ind, 'N') = 'N'),
+questions as (
+  select t.col_pk, q.pk1 as question_pk
+  from tests t
+  join qti_asi_data sec on sec.parent_pk1 = t.asmt_pk
+  join qti_asi_data q   on q.parent_pk1 = sec.pk1 and q.bbmd_asi_type = 3
+  union
+  select t.col_pk, pq.pk1
+  from tests t
+  join qti_asi_data sec on sec.parent_pk1 = t.asmt_pk
+  join qti_asi_data blk on blk.parent_pk1 = sec.pk1
+  join qti_block_mapping m on m.question_block_pk1 = blk.pk1
+  join qti_asi_data pq  on pq.pk1 = m.question_pk1)
+select t.course_id, t.test_title, q.bbmd_questiontype as question_type_code,
+  case q.bbmd_questiontype
+    when 1 then 'Multiple Choice' when 2 then 'True/False' when 3 then 'Multiple Answer'
+    when 4 then 'Ordering' when 5 then 'Matching' when 6 then 'Fill in the Blank' when 7 then 'Essay'
+    when 8 then 'Numeric' when 9 then 'Calculated' when 10 then 'File Upload' when 11 then 'Hot Spot'
+    when 12 then 'Fill in the Blank Plus' when 13 then 'Jumbled Sentence' when 14 then 'Quiz Bowl'
+    when 15 then 'Opinion Scale' when 16 then 'Short Response' when 17 then 'Either/Or'
+    when 19 then 'Presentation Only' when 20 then 'Page Break' when 21 then 'AI Chat'
+    else 'code ' || q.bbmd_questiontype end                    as question_type,
+  q.bbmd_questiontype in (4, 10, 14, 15)                       as removed_by_conversion,
+  count(distinct q.pk1)                                        as questions
+from tests t
+join questions qq    on qq.col_pk = t.col_pk
+join qti_asi_data q  on q.pk1 = qq.question_pk
+group by t.course_id, t.test_title, q.bbmd_questiontype
+order by t.course_id, t.test_title, q.bbmd_questiontype;
+
+-- S5e. Question sources per course: tests, pools and question banks, and how many questions tests
+--      draw through random blocks and question sets. With the site setting that turns undeployed
+--      tests into question banks (S14), those tests lose their random blocks and question sets, so
+--      the post-scan checks the draws are all still there.
+with scope as ({SCOPE}),
+a as (
+  select s.course_id, x.pk1 as asmt_pk, x.bbmd_assessmenttype as atype
+  from scope s
+  join qti_asi_data x on x.crsmain_pk1 = s.crs_pk and x.bbmd_asi_type = 1),
+draws as (
+  select a.course_id, count(*) as n
+  from a
+  join qti_asi_data sec on sec.parent_pk1 = a.asmt_pk
+  join qti_asi_data blk on blk.parent_pk1 = sec.pk1
+  join qti_block_mapping m on m.question_block_pk1 = blk.pk1
+  group by a.course_id)
+select a.course_id,
+  count(*) filter (where a.atype = 1)                as tests,
+  count(*) filter (where a.atype = 4)                as pools_and_banks,
+  count(*) filter (where a.atype not in (1, 4))      as other_assessments,
+  coalesce(max(d.n), 0)                              as block_draws
+from a
+left join draws d on d.course_id = a.course_id
+group by a.course_id
+order by a.course_id;
 
 
 -- ===========================================================================
@@ -676,6 +743,22 @@ from scope s
 join t on t.course_main_pk1 = s.crs_pk
        or (t.title like 'copy|%' and s.course_id in (split_part(t.subject, ',', 1), split_part(t.subject, ',', 2)))
 order by s.course_id, t.dtcreated;
+
+
+-- ===========================================================================
+-- S14. Site conversion settings (system_registry), recorded with every run because they shape
+--      what a conversion produces (Admin > Ultra Experience Management). Keys seen on demo
+--      2026-11-14: nesting levels (3 by default, 4 with the additional level, which can't be
+--      undone), content areas to learning modules, folder and learning module descriptions to
+--      documents, and undeployed tests to question banks. Not scoped to courses.
+-- ===========================================================================
+select r.registry_key, r.registry_value
+from system_registry r
+where r.registry_key in ('course.structure.max_level_of_nesting',
+                         'ultraui.converting.content.areas.to.learning.modules',
+                         'ultraui.converting.folder.and.learning.module.descriptions.to.documents',
+                         'ultraui.converting.undeployed.tests.to.question.banks')
+order by r.registry_key;
 
 
 -- ===========================================================================

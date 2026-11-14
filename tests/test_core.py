@@ -2,8 +2,8 @@
 from convscan import config, kit, rules
 from convscan.scope import Scope
 
-EXPECTED = ["S0", "S1", "S2", "S3", "S3c", "S3b", "S4", "S5", "S5b", "S5c", "S6", "S7", "S7b", "S8", "S8b",
-            "S9", "S10", "S11", "S12", "S12b", "S13", "M2"]
+EXPECTED = ["S0", "S1", "S2", "S3", "S3c", "S3b", "S4", "S5", "S5b", "S5c", "S5d", "S5e", "S6", "S7", "S7b",
+            "S8", "S8b", "S9", "S10", "S11", "S12", "S12b", "S13", "S14", "M2"]
 
 
 def test_kit_splits_into_every_labeled_statement():

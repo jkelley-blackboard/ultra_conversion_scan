@@ -48,6 +48,16 @@ Every grade column in the Original, matched to the Ultra copy by its attached it
 Grade columns by match: {% for k, v in map_counts | dictsort %}{{ k }} {{ v }}{{ ", " if not loop.last }}{% endfor %}. An ambiguous or not-found column is resolved before hand-off; columns new in Ultra can be ignored.
 {% endif %}
 
+{% if settings %}
+## Site conversion settings at the post-scan
+
+| Setting | This site |
+|---|---|
+{% for s in settings %}
+| {{ s.label }} | {{ s.value }} |
+{% endfor %}
+
+{% endif %}
 ## Not checked by this scan
 
 - What a learner sees on screen, and whether SCORM content resumes in the player.

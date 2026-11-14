@@ -41,6 +41,25 @@ def course_facts(data: dict, cid: str) -> dict:
     }
 
 
+_SETTINGS = {
+    "course.structure.max_level_of_nesting": "Levels of nested content (3 by default, 4 with the additional level)",
+    "ultraui.converting.content.areas.to.learning.modules": "Content areas become learning modules",
+    "ultraui.converting.folder.and.learning.module.descriptions.to.documents":
+        "Folder and learning module descriptions become documents",
+    "ultraui.converting.undeployed.tests.to.question.banks": "Undeployed tests become question banks",
+}
+
+
+def site_settings(data: dict) -> list[dict]:
+    """S14 rows as labeled settings, for the reports. Empty if S14 wasn't run."""
+    have = {r["registry_key"]: r.get("registry_value") for r in data.get("S14", [])}
+    if not have:
+        return []
+    def show(v):
+        return {"true": "Yes", "false": "No", "none": "not set"}.get(str(v).lower(), v)
+    return [{"label": label, "value": show(have.get(k))} for k, label in _SETTINGS.items()]
+
+
 def _env(templates: pathlib.Path) -> jinja2.Environment:
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(templates)), trim_blocks=True,
                              lstrip_blocks=True, keep_trailing_newline=True, undefined=jinja2.StrictUndefined)
@@ -63,7 +82,8 @@ def render_pre(run_dir: pathlib.Path, run: dict, data: dict, cfg: dict) -> list[
     out.mkdir(exist_ok=True)
     ran = _ran(run)
     common = {"run": run, "cfg": cfg, "version": __version__, "today": dt.date.today().isoformat(),
-              "not_checked_by_sql": doc.get("not_checked_by_sql", []), "severity": rules.SEVERITY}
+              "not_checked_by_sql": doc.get("not_checked_by_sql", []), "severity": rules.SEVERITY,
+              "settings": site_settings(data)}
     written, summary = [], []
     for cid in _course_ids(data):
         findings, not_checked = rules.evaluate(doc, data, cid, ran, cfg)
@@ -87,7 +107,7 @@ def render_post(run_dir: pathlib.Path, run: dict, data: dict, base_run: dict, ba
     out.mkdir(exist_ok=True)
     ran_base, ran_post = _ran(base_run), _ran(run)
     common = {"run": run, "base_run": base_run, "cfg": cfg, "version": __version__,
-              "today": dt.date.today().isoformat()}
+              "today": dt.date.today().isoformat(), "settings": site_settings(data)}
     written, summary, all_map, all_diffs = [], [], [], []
     for o, n in run["pairs"]:
         checks, diffs = compare.compare_course(o, n, base, data, ran_base, ran_post)

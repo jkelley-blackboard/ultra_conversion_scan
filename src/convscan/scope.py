@@ -34,7 +34,7 @@ class Scope:
     """Either a manifest (list of pairs) or a node batch_uid."""
     pairs: list[tuple[str, str]] | None = None
     node: str | None = None
-    suffix: str = "7777"
+    suffix: str = "-7777"
 
     @classmethod
     def from_manifest(cls, path: str, suffix: str) -> "Scope":

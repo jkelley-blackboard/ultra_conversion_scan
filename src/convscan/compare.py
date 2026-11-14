@@ -266,6 +266,37 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
             add("Tests", "Questions with partial-credit answer values", ov, nv, ACTION,
                 f"{ov - nv} question(s) lost their answer values: run the partial-credit repair, then re-scan.")
 
+    # Question sources: every random-block draw must survive. Undeployed tests may become banks.
+    if both("S5e"):
+        a, b = _one(base, "S5e", o), _one(post, "S5e", n)
+        ov, nv = a.get("block_draws") or 0, b.get("block_draws") or 0
+        add("Tests", "Questions drawn through random blocks and question sets", ov, nv,
+            SAME if ov == nv else DIFFERENT, "" if ov == nv else "Tests may now draw fewer questions: check them.")
+        op, np_ = a.get("pools_and_banks") or 0, b.get("pools_and_banks") or 0
+        if np_ != op:
+            add("Tests", "Pools and question banks", op, np_, EXPECTED if np_ > op else DIFFERENT,
+                "Undeployed tests became question banks (a site setting, listed below)." if np_ > op else "")
+
+    # Question types Ultra removes
+    if both("S5d"):
+        # Conversion adds Presentation Only blocks (test instructions) and may add page breaks: not questions.
+        orows = [r for r in _rows(base, "S5d", o) if r.get("question_type_code") not in (19, 20)]
+        nrows = [r for r in _rows(post, "S5d", n) if r.get("question_type_code") not in (19, 20)]
+        removed = sum(r.get("questions") or 0 for r in orows if r.get("removed_by_conversion") is True)
+        ot = sum(r.get("questions") or 0 for r in orows)
+        nt = sum(r.get("questions") or 0 for r in nrows)
+        mc = sum(r.get("questions") or 0 for r in orows if r.get("question_type_code") == 1)
+        if ot == nt:
+            add("Tests", "Questions in tests", ot, nt, SAME,
+                f"{mc} Multiple Choice question(s) are stored as Multiple Answer in Ultra (single answer)."
+                if mc else "")
+        elif removed and nt == ot - removed:
+            add("Tests", "Questions in tests", ot, nt, ACTION,
+                f"{removed} question(s) of types Ultra doesn't support were removed: replace them.")
+        else:
+            add("Tests", "Questions in tests", ot, nt, DIFFERENT,
+                f"{removed} were of types Ultra removes." if removed else "")
+
     # Test exceptions
     if both("S12b"):
         ov, nv = len(_rows(base, "S12b", o)), len(_rows(post, "S12b", n))

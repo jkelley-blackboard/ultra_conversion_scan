@@ -58,6 +58,18 @@ The scan found nothing in this course that the rule table flags.
 {% endfor %}
 
 {% endif %}
+{% if settings %}
+## Site conversion settings
+
+These site-wide settings decide how the course converts. Agree them before the first batch: the additional nesting level can't be undone.
+
+| Setting | This site |
+|---|---|
+{% for s in settings %}
+| {{ s.label }} | {{ s.value }} |
+{% endfor %}
+
+{% endif %}
 ## Not checked by this scan
 
 {% for item in not_checked_by_sql %}

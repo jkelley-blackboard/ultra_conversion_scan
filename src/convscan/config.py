@@ -9,7 +9,7 @@ PACKAGE = pathlib.Path(__file__).parent
 
 DEFAULTS = {
     "prepared_for": "TODO institution name",
-    "new_id_suffix": "7777",
+    "new_id_suffix": "-7777",   # bulk copy and convert always puts a hyphen before the suffix
     "max_course_id_length": 15,
     "statement_timeout_s": 900,
     "learner_queries": True,

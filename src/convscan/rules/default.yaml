@@ -120,6 +120,57 @@ rules:
 
   # --- Tier 2: needs fixing -----------------------------------------------------------------
 
+  - id: removed_content_types
+    title: Content that conversion removes
+    source: S3c
+    # Blackboard's help (Course Preview, "Content types and settings that will NOT convert", read
+    # 2026-11-14), mapped to content handlers seen on demo DDA.
+    where:
+      cnthndlr_handle:
+        - resource/x-bb-wiki
+        - resource/x-bb-bloglink
+        - resource/x-bb-achievement
+        - resource/x-bb-module-page
+        - resource/x-bb-syllabus
+        - resource/x-bbpi-selfpeer-type1
+    measure: sum(items)
+    severity: 2
+    known: true
+    examples: cnthndlr_handle
+    says: "{value} item(s) of a type Ultra removes on conversion: {examples}."
+    action: Rebuild these in Ultra (for example a document, a discussion or an LTI tool), or agree to drop them.
+    decision: true
+
+  - id: removed_question_types
+    title: Question types that conversion removes
+    source: S5d
+    where: {removed_by_conversion: true}
+    measure: sum(questions)
+    severity: 2
+    known: true
+    examples: test_title
+    says: "{value} question(s) of a type Ultra removes (File Upload, Opinion Scale, Ordering or Quiz Bowl), in: {examples}. The test's points and scoring change."
+    action: Replace these questions in the Ultra copy (or before converting). If a test gates content, treat this as blocking.
+
+  - id: source_available
+    title: Course is available to learners
+    source: S1
+    where: {available_ind: "Y"}
+    severity: 0
+    known: true
+    says: "The course is available to learners. Bulk copy and convert skips available courses."
+    action: Make the course unavailable at the freeze, before the copy starts.
+
+  - id: course_links
+    title: Course links
+    source: S3c
+    where: {cnthndlr_handle: resource/x-bb-courselink}
+    measure: sum(items)
+    severity: 0
+    known: false
+    says: "{value} course link(s). Blackboard's help lists Course Links among items that don't convert, although conversion creates course links of its own for discussions."
+    action: Check each link arrives in Ultra and opens the right item.
+
   - id: partial_credit_graded
     title: Partial credit in graded tests
     source: S5c
@@ -208,8 +259,8 @@ rules:
   - id: content_type_untested
     title: Content types not yet covered by conversion testing
     source: S3c
-    # Types seen converting correctly in testing (demo, 2026-11-14). Add a type here only after a
-    # test conversion shows it arrives and works in Ultra.
+    # Types seen converting correctly in testing (demo, 2026-11-14), plus types other rules already
+    # flag. Add a type here only after a test conversion shows it arrives and works in Ultra.
     where:
       cnthndlr_handle__ne:
         - resource/x-plugin-scormengine
@@ -220,6 +271,13 @@ rules:
         - resource/x-bb-externallink
         - resource/x-bb-assignment
         - resource/x-bb-blankpage
+        - resource/x-bb-courselink
+        - resource/x-bb-wiki
+        - resource/x-bb-bloglink
+        - resource/x-bb-achievement
+        - resource/x-bb-module-page
+        - resource/x-bb-syllabus
+        - resource/x-bbpi-selfpeer-type1
     measure: sum(items)
     severity: 0
     known: false
