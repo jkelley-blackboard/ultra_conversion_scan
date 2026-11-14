@@ -1,4 +1,5 @@
 {% set actions = checks | selectattr("status", "equalto", "action") | list %}
+{% set result = {"same": "Same", "expected": "Expected", "different": "Different", "action": "Needs action", "not checked": "Not checked"} %}
 {% set different = checks | selectattr("status", "equalto", "different") | list %}
 # Conversion Hand-off Report: {{ c.course_id }}, {{ c.course_name }}
 
@@ -28,7 +29,7 @@
 | Area | Check | Original | Ultra copy | Result | Note |
 |---|---|---|---|---|---|
 {% for k in checks %}
-| {{ k.area }} | {{ k.check }} | {{ k.original | n }} | {{ k.ultra | n }} | {{ k.status | capitalize }} | {{ k.note | replace("|", "/") }} |
+| {{ k.area }} | {{ k.check }} | {{ k.original | n }} | {{ k.ultra | n }} | {{ result[k.status] }} | {{ k.note | replace("|", "/") }} |
 {% endfor %}
 
 ## ID map

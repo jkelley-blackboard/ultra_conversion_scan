@@ -12,7 +12,7 @@
 | {{ x.c.course_id }} | {{ x.c.course_name | replace("|", "/") }} | {{ x.c.in_progress | n }} | {{ x.counts[1] }} | {{ x.counts[2] }} | {{ x.counts[3] }} | {{ x.counts[0] }} | {{ x.decisions }} | [{{ x.report }}]({{ x.report }}) |
 {% endfor %}
 {% else %}
-| Original | Ultra copy | Name | Same | Expected | Different | Need action | Not checked | Report |
+| Original | Ultra copy | Name | Same | Expected | Different | Needs action | Not checked | Report |
 |---|---|---|---|---|---|---|---|---|
 {% for x in courses %}
 | {{ x.c.course_id }} | {{ x.c.new_course_id }} | {{ x.c.course_name | replace("|", "/") }} | {{ x.statuses["same"] }} | {{ x.statuses["expected"] }} | {{ x.statuses["different"] }} | {{ x.statuses["action"] }} | {{ x.statuses["not checked"] }} | [{{ x.report }}]({{ x.report }}) |

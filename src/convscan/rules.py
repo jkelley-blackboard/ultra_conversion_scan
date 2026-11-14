@@ -107,9 +107,11 @@ def evaluate(doc: dict, data: dict[str, list[dict]], course_id: str, ran: set[st
             continue
         examples = ""
         if rule.get("examples"):
+            labels = doc.get("labels") or {}
             seen = []
             for r in rows:
                 v = r.get(rule["examples"])
+                v = labels.get(v, v)   # plain names in place of system values
                 if v not in (None, "") and v not in seen:
                     seen.append(v)
             examples = "; ".join(map(str, seen[:5])) + (f" (and {len(seen) - 5} more)" if len(seen) > 5 else "")

@@ -369,7 +369,8 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
         add("Learner records", "Grade and attempt records matching", compared,
             compared - differing - missing - unmapped, status, " ".join(note))
     else:
-        add("Learner records", "Grade and attempt records", "", "", NOT_CHECKED, "Needs S7 on both runs and M2.")
+        add("Learner records", "Grade and attempt records", "", "", NOT_CHECKED,
+            "The learner-level data or the column map is missing from one of the scans (run without --no-learner).")
 
     # SCORM runtime state
     if both("S10"):
@@ -418,7 +419,8 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
                "learner view. " if unsaved else "")
             + (f"{bad} differ or are missing." if bad else ""))
     else:
-        add("SCORM", "SCORM resume state", "", "", NOT_CHECKED, "Needs S10 on both runs.")
+        add("SCORM", "SCORM resume state", "", "", NOT_CHECKED,
+            "The learner-level SCORM data is missing from one of the scans (run without --no-learner).")
 
     # Hidden columns that became visible
     if both("S4") and "M2" in ran_post:

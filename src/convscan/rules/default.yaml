@@ -1,14 +1,47 @@
-# Default rule table for the pre-conversion report.
-# Each rule: id, title, source (query label), measure, where, threshold, severity (1-4, or 0 = to check),
-# known (a known conversion behavior with a known fix), says and action (plain language, client-facing:
-# no em-dashes), examples (a column to list), decision (true = the institution must decide).
-# Syntax is in README.md, "Writing rules".
+# The rule table for the pre-conversion report.
+#
+# Each rule reads one query (source), picks rows (where), measures them (measure), and fires when the
+# measure is above the threshold. `says` and `action` appear in reports for the institution: keep them
+# plain and don't use em-dashes. Full syntax: README.md, "Writing rules".
+#
+# Sections run from most to least serious: tier 1 blocks learners, tier 2 needs fixing, tier 3
+# improves the experience, and "to check" (severity 0) is unknown or can't be tested by the scan.
 
+# Listed in every report under "Not checked".
 not_checked_by_sql:
-  - What a learner sees on screen, and whether SCORM content resumes in the player (learner-view check).
-  - Whether files linked from the Content Collection still exist (HTTP or REST check).
-  - Packages launched from the Content Collection rather than from a SCORM item.
-  - Systems outside the LMS that store course or grade column IDs (use the ID map from the hand-off report).
+  - What a learner sees on screen (check with a learner view).
+  - Links inside SCORM packages and Content Collection pages that point to the Original course.
+  - Whether files linked from the Content Collection still exist.
+  - Systems outside the LMS that store course or grade column IDs (give them the ID map from the hand-off report).
+
+# Plain names shown in reports in place of system values (used when a rule lists examples).
+labels:
+  resource/x-bb-wiki: Wiki
+  resource/x-bb-bloglink: Blog
+  resource/x-bb-achievement: Achievement
+  resource/x-bb-module-page: Module page
+  resource/x-bb-syllabus: Syllabus
+  resource/x-bbpi-selfpeer-type1: Self and peer assessment
+  resource/x-bb-courselink: Course link
+  resource/x-bb-toollink: Tool link
+  resource/x-bb-lesson: Learning module
+  resource/x-bb-lesson-plan: Lesson plan
+  resource/x-bb-blti-link: LTI link
+  resource/x-bb-file: File
+  resource/x-bb-image: Image
+  resource/x-bb-video: Video
+  resource/x-bb-audio: Audio
+  resource/x-bb-journallink: Journal
+  resource/x-bb-asmt-survey-link: Survey
+  resource/x-bb-collaborate: Collaborate session
+  resource/x-bb-youtube-mashup: YouTube mashup
+  resource/x-bb-flickr-mashup: Flickr mashup
+  resource/x-bb-slideshare-mashup: SlideShare mashup
+  resource/x-bb-textbook: Textbook
+  resource/x-bb-grouplink: Group link
+  resource/x-bb-chatlink: Chat
+  resource/x-bb-vclink: Virtual classroom
+  resource/x-turnitin-assignment: Turnitin assignment
 
 rules:
 
@@ -28,7 +61,7 @@ rules:
     title: New course ID too long
     source: S1
     measure: max(new_id_length)
-    threshold: {config: max_course_id_length}   # 0 in config switches the rule off
+    threshold: {config: max_course_id_length}   # 0 in the config switches this rule off
     severity: 1
     known: true
     says: "The new course ID {first[expected_new_course_id]} is {value} characters long."
@@ -46,6 +79,16 @@ rules:
     says: "{value} attempt(s) are open in {n} test(s): {examples}. An attempt still open at the freeze arrives in Ultra in progress."
     action: Ask learners to submit before the freeze. Re-run this scan at the freeze.
 
+  - id: timed_open_attempts
+    title: Timed tests with attempts open now
+    source: S12
+    where: {time_limit_minutes__gt: 0, open_attempts__gt: 0}
+    severity: 1
+    known: false
+    examples: test_title
+    says: "{n} timed test(s) have open attempts: {examples}. A timed attempt left open during the freeze may run out or submit itself."
+    action: Clear these attempts before the freeze, or confirm how they arrive in Ultra.
+
   - id: open_assignment_attempts
     title: Assignments started but not submitted
     source: S7
@@ -54,50 +97,17 @@ rules:
     severity: 1
     known: false
     examples: column_title
-    says: "{value} assignment attempt(s) are in progress (saved as a draft, not submitted): {examples}."
+    says: "{value} assignment attempt(s) are saved as drafts but not submitted: {examples}."
     action: Ask learners to submit before the freeze, or check the drafts arrive in Ultra.
 
-  - id: open_scorm_attempts
-    title: SCORM attempts in progress
-    source: S7
-    where: {open__gt: 0, score_provider_handle: resource/x-plugin-scormengine}
-    measure: sum(open)
-    severity: 0
-    known: true
-    examples: column_title
-    says: "{value} SCORM attempt(s) are in progress: {examples}. In testing these resumed in Ultra, but the scan can't always see the saved position."
-    action: Check a sample of these learners resume in the right place in the Ultra copy.
-
-  - id: waiting_for_grading
-    title: Work waiting to be graded
-    source: S7
-    where: {needs_grading__gt: 0}
-    measure: sum(needs_grading)
-    severity: 0
-    known: true
-    examples: column_title
-    says: "{value} submission(s) are waiting for a grader: {examples}. They carry over and can be graded in Ultra."
-    action: Agree who grades them, and whether before the freeze or in Ultra.
-    decision: true
-
-  - id: timed_open_attempts
-    title: Timed tests with attempts open now
-    source: S12
-    where: {time_limit_minutes__gt: 0, open_attempts__gt: 0}
-    severity: 1
-    known: false
-    examples: test_title
-    says: "{n} timed test(s) have open attempts: {examples}. A timed attempt left open during the freeze may run out or auto-submit."
-    action: Clear these attempts before the freeze, or confirm how they arrive in Ultra.
-
   - id: partial_credit_gating
-    title: Partial credit in tests that open or route content
+    title: Partial credit in tests that open the next step
     source: S5b
     measure: sum(in_gating_tests)
     severity: 1
     known: true
-    says: "{value} question(s) with partial credit sit in tests whose score opens the next step. Conversion resets partial-credit answers to 0%, so learners who haven't taken the test yet could score lower and be held back."
-    action: Restore the answer values in the Ultra copy before learners use it (scripted from the pre-conversion baseline).
+    says: "{value} question(s) with partial credit are in tests whose score opens the next step. Conversion sets partial credit on wrong answers to 0%, so learners who haven't taken the test yet could score lower and be held back."
+    action: Restore the answer values in the Ultra copy before learners use it (scripted from the pre-conversion data).
 
   - id: partial_credit_routing
     title: Partial credit in tests that route learners by score
@@ -105,71 +115,20 @@ rules:
     measure: sum(in_routing_tests)
     severity: 1
     known: true
-    says: "{value} question(s) with partial credit sit in tests whose score sends learners down different paths."
-    action: Restore the answer values in the Ultra copy, then check one learner per path.
+    says: "{value} question(s) with partial credit are in tests whose score sends learners down different paths. Conversion sets partial credit on wrong answers to 0%."
+    action: Restore the answer values in the Ultra copy, then check one learner on each path.
 
-  - id: groups_in_release_rules
-    title: Release rules that depend on groups
+  - id: groups_in_release_conditions
+    title: Release conditions that depend on groups
     source: S8
     where: {criteria_using_group__gt: 0}
     severity: 1
     known: true
     examples: group_name
     says: "{n} group(s) control access to content: {examples}. Groups are not carried over, so this content would be closed to the learners it was meant for."
-    action: Groups and their members are restored by script after the conversion, then checked.
+    action: Restore the groups and their members after the conversion (scripted), then check access.
 
   # --- Tier 2: needs fixing -----------------------------------------------------------------
-
-  - id: removed_content_types
-    title: Content that conversion removes
-    source: S3c
-    # Blackboard's help (Course Preview, "Content types and settings that will NOT convert", read
-    # 2026-11-14), mapped to content handlers seen on demo DDA.
-    where:
-      cnthndlr_handle:
-        - resource/x-bb-wiki
-        - resource/x-bb-bloglink
-        - resource/x-bb-achievement
-        - resource/x-bb-module-page
-        - resource/x-bb-syllabus
-        - resource/x-bbpi-selfpeer-type1
-    measure: sum(items)
-    severity: 2
-    known: true
-    examples: cnthndlr_handle
-    says: "{value} item(s) of a type Ultra removes on conversion: {examples}."
-    action: Rebuild these in Ultra (for example a document, a discussion or an LTI tool), or agree to drop them.
-    decision: true
-
-  - id: removed_question_types
-    title: Question types that conversion removes
-    source: S5d
-    where: {removed_by_conversion: true}
-    measure: sum(questions)
-    severity: 2
-    known: true
-    examples: test_title
-    says: "{value} question(s) of a type Ultra removes (File Upload, Opinion Scale, Ordering or Quiz Bowl), in: {examples}. The test's points and scoring change."
-    action: Replace these questions in the Ultra copy (or before converting). If a test gates content, treat this as blocking.
-
-  - id: source_available
-    title: Course is available to learners
-    source: S1
-    where: {available_ind: "Y"}
-    severity: 0
-    known: true
-    says: "The course is available to learners. Bulk copy and convert skips available courses."
-    action: Make the course unavailable at the freeze, before the copy starts.
-
-  - id: course_links
-    title: Course links
-    source: S3c
-    where: {cnthndlr_handle: resource/x-bb-courselink}
-    measure: sum(items)
-    severity: 0
-    known: false
-    says: "{value} course link(s). Blackboard's help lists Course Links among items that don't convert, although conversion creates course links of its own for discussions."
-    action: Check each link arrives in Ultra and opens the right item.
 
   - id: partial_credit_graded
     title: Partial credit in graded tests
@@ -179,8 +138,8 @@ rules:
     severity: 2
     known: true
     examples: test_title
-    says: "{value} question(s) give partial credit for some wrong answers. Conversion resets those answers to 0%. Tests: {examples}."
-    action: Restore the answer values in the Ultra copy (scripted from the pre-conversion baseline).
+    says: "{value} question(s) give partial credit for some wrong answers. Conversion sets those answers to 0%. Tests: {examples}."
+    action: Restore the answer values in the Ultra copy (scripted from the pre-conversion data).
 
   - id: groups_dropped
     title: Groups with members
@@ -190,7 +149,7 @@ rules:
     known: true
     examples: group_name
     says: "{n} group(s) with members: {examples}. Groups are not carried over."
-    action: Groups and their members are restored by script after the conversion.
+    action: Restore the groups and their members after the conversion (scripted).
 
   - id: hidden_columns
     title: Grade columns hidden from learners
@@ -203,18 +162,50 @@ rules:
     action: Decide at hand-off whether each should be hidden, removed or left visible.
     decision: true
 
-  - id: forum_release_rules
-    title: Release rules on discussions
+  - id: forum_release_conditions
+    title: Release conditions on discussions
     source: S9
     where: {cnthndlr_handle: resource/x-bb-forumlink}
     severity: 2
     known: true
     examples: item_title
-    says: "{n} release condition(s) sit on discussion links: {examples}. These are not carried over."
-    action: Re-create the conditions in the Ultra copy, or agree to leave them open.
+    says: "{n} release condition(s) are on discussions: {examples}. These are not carried over, so the discussions open to everyone in the course."
+    action: Re-create the conditions in the Ultra copy, or agree to leave the discussions open.
 
-  - id: proctoring_settings
-    title: Proctoring or secure browser settings
+  - id: removed_content_types
+    title: Content that conversion removes
+    source: S3c
+    # From Blackboard's help (Course Preview, "Content types and settings that will NOT convert",
+    # read 2026-11-14), matched to the content types seen on a demo site.
+    where:
+      cnthndlr_handle:
+        - resource/x-bb-wiki
+        - resource/x-bb-bloglink
+        - resource/x-bb-achievement
+        - resource/x-bb-module-page
+        - resource/x-bb-syllabus
+        - resource/x-bbpi-selfpeer-type1
+    measure: sum(items)
+    severity: 2
+    known: true
+    examples: cnthndlr_handle
+    says: "{value} item(s) of a type Ultra doesn't support, which conversion removes: {examples}."
+    action: Rebuild these in Ultra (for example as a document, a discussion or an LTI tool), or agree to drop them.
+    decision: true
+
+  - id: removed_question_types
+    title: Question types that conversion removes
+    source: S5d
+    where: {removed_by_conversion: true}
+    measure: sum(questions)
+    severity: 2
+    known: true
+    examples: test_title
+    says: "{value} question(s) of a type Ultra doesn't support (File Upload, Opinion Scale, Ordering or Quiz Bowl), in: {examples}. Conversion removes them, so the test's points change."
+    action: Replace these questions, before or after converting. If the test opens the next step, treat this as blocking.
+
+  - id: secure_browser
+    title: Tests that require a secure browser
     source: S12
     where: {req_secure_browser_take_ind: "Y"}
     severity: 2
@@ -236,13 +227,13 @@ rules:
   # --- Tier 3: improves the experience -------------------------------------------------------
 
   - id: orphan_columns
-    title: Grade columns with no item
+    title: Grade columns not attached to an item
     source: S4
     where: {orphan_candidate: true}
     severity: 3
     known: false
     examples: title
-    says: "{n} manual or unattached grade column(s): {examples}."
+    says: "{n} grade column(s) aren't attached to any item (entered by hand, or left over): {examples}."
     action: Optional tidy-up after the conversion.
 
   - id: dated_items
@@ -254,13 +245,45 @@ rules:
     says: "{value} item(s) have display dates."
     action: Check the dates still make sense in Ultra.
 
-  # --- To check: unknown or not testable by SQL ---------------------------------------------
+  # --- To check: unknown, or can't be tested by the scan -------------------------------------
+
+  - id: source_available
+    title: Course is available to learners
+    source: S1
+    where: {available_ind: "Y"}
+    severity: 0
+    known: true
+    says: "The course is available to learners. Bulk copy and convert skips courses that are available."
+    action: Make the course unavailable at the freeze, before the copy starts.
+
+  - id: open_scorm_attempts
+    title: SCORM attempts in progress
+    source: S7
+    where: {open__gt: 0, score_provider_handle: resource/x-plugin-scormengine}
+    measure: sum(open)
+    severity: 0
+    known: true
+    examples: column_title
+    says: "{value} SCORM attempt(s) are in progress: {examples}. In testing these resumed in Ultra, and the hand-off report compares each learner's saved place."
+    action: Check the hand-off report's SCORM row; open a sample in the learner view if it shows differences.
+
+  - id: waiting_for_grading
+    title: Work waiting to be graded
+    source: S7
+    where: {needs_grading__gt: 0}
+    measure: sum(needs_grading)
+    severity: 0
+    known: true
+    examples: column_title
+    says: "{value} submission(s) are waiting for a grader: {examples}. They carry over and can be graded in Ultra."
+    action: Agree who grades them, and whether before the freeze or in Ultra.
+    decision: true
 
   - id: content_type_untested
     title: Content types not yet covered by conversion testing
     source: S3c
     # Types seen converting correctly in testing (demo, 2026-11-14), plus types other rules already
-    # flag. Add a type here only after a test conversion shows it arrives and works in Ultra.
+    # flag. Add a type only after a test conversion shows it arrives and works in Ultra.
     where:
       cnthndlr_handle__ne:
         - resource/x-plugin-scormengine
@@ -285,6 +308,16 @@ rules:
     says: "{value} item(s) of {n} content type(s) not yet covered by conversion testing: {examples}."
     action: Convert one example in a test course and check it in Ultra before this course converts.
 
+  - id: course_links
+    title: Course links
+    source: S3c
+    where: {cnthndlr_handle: resource/x-bb-courselink}
+    measure: sum(items)
+    severity: 0
+    known: false
+    says: "{value} course link(s). Blackboard's help lists course links among items that don't convert, though conversion creates its own course links for discussions."
+    action: Check each link arrives in Ultra and opens the right item.
+
   - id: test_exceptions
     title: Test exceptions (extra time or attempts)
     source: S12b
@@ -301,31 +334,31 @@ rules:
     severity: 0
     known: false
     examples: group_name
-    says: "{n} group(s) carry test exceptions: {examples}. Groups are not carried over."
-    action: Check the exceptions after the group repair.
+    says: "{n} group(s) have test exceptions: {examples}. Groups are not carried over."
+    action: Check the exceptions after the groups are restored.
 
   - id: proportional_credit
-    title: Partial credit by proportion
+    title: Questions that give partial credit in proportion
     source: S5c
     where: {weights_found: 0}
     measure: distinct(question_pk)
     severity: 0
     known: false
-    says: "{value} question(s) give credit in proportion (matching, ordering and similar types)."
+    says: "{value} question(s) give credit in proportion to how much is right (matching, jumbled sentence and similar types)."
     action: Check the partial-credit setting carried over on one of them.
 
   - id: calculated_gates
-    title: Release rules on calculated columns
+    title: Release conditions on calculated columns
     source: S9
     where: {gate_column_calculated__ne: ["N", null]}
     severity: 0
     known: false
     examples: gate_column_title
-    says: "{n} release condition(s) read a calculated column: {examples}. A test feeding that column may gate content indirectly."
-    action: Check whether any test feeding these columns uses partial credit.
+    says: "{n} release condition(s) depend on a calculated column: {examples}. A test that feeds the column controls access indirectly."
+    action: Check whether any test feeding these columns uses partial credit, and check the column's value for a sample of learners in Ultra.
 
-  - id: named_user_rules
-    title: Release rules naming individual learners
+  - id: named_user_conditions
+    title: Release conditions that name individual learners
     source: S9
     where: {users_named_count__gt: 0}
     severity: 0
@@ -341,7 +374,7 @@ rules:
     severity: 0
     known: false
     says: "{value} link(s) open HTML pages in the Content Collection. These pages may have Original course addresses built in."
-    action: Open the pages and check for links that point to the Original course.
+    action: Open the pages and look for links to the Original course.
 
   - id: cc_references
     title: Links to the Content Collection
