@@ -102,6 +102,7 @@ def render_pre(run_dir: pathlib.Path, run: dict, data: dict, cfg: dict) -> list[
 def render_post(run_dir: pathlib.Path, run: dict, data: dict, base_run: dict, base: dict,
                 cfg: dict) -> list[pathlib.Path]:
     env = _env(cfg["templates"])
+    labels = rules.load_rules(cfg["rules"]).get("labels") or {}   # plain names for content types
     out = run_dir / "reports"
     out.mkdir(exist_ok=True)
     ran_base, ran_post = _ran(base_run), _ran(run)
@@ -109,7 +110,7 @@ def render_post(run_dir: pathlib.Path, run: dict, data: dict, base_run: dict, ba
               "settings": site_settings(data)}
     written, summary, all_map, all_diffs = [], [], [], []
     for o, n in run["pairs"]:
-        checks, diffs = compare.compare_course(o, n, base, data, ran_base, ran_post)
+        checks, diffs = compare.compare_course(o, n, base, data, ran_base, ran_post, labels=labels)
         idmap = compare.id_map(o, n, base, data)
         all_map += idmap
         all_diffs += diffs

@@ -43,6 +43,7 @@ def test_handoff_reports_losses_and_matches(tmp_path):
     assert "| SCORM | SCORM records with the same resume state | 3 | 3 | Same |" in text   # HTML title normalized
     assert "| Learner records | Grade and attempt records matching | 9 | 9 | Same |" in text
     assert "Ultra drops the weighted total column." in text
+    assert "Added by conversion: Document +2; Folder +2." in text            # plain names, not system values
     clean = (post / "DEMO102_handoff.md").read_text(encoding="utf-8")
     assert "Needs action" not in clean                                       # assignment -> assessment is fine
     assert "Ready to verify and release" in clean

@@ -94,8 +94,13 @@ class Pair:
     post: dict                # post run data {label: rows}, including the *_now re-reads
     ran_base: set
     ran_post: set
+    labels: dict = field(default_factory=dict)  # plain names for system values (the rule file's labels)
     checks: list = field(default_factory=list)
     diffs: list = field(default_factory=list)   # per-learner differences, for data/diff_learner_records.csv
+
+    def name(self, value) -> str:
+        """A plain name for a system value, or its last part if there's no label."""
+        return self.labels.get(value) or str(value).rsplit("/", 1)[-1]
 
     def add(self, area, check, original, ultra, status, note=""):
         self.checks.append({"area": area, "check": check, "original": original, "ultra": ultra,
@@ -188,8 +193,8 @@ def check_content_types(p: Pair):
         return inv
 
     oi, ni = inventory(p.orig("S3c")), inventory(p.copy("S3c"))
-    short = [f"{h.rsplit('/', 1)[-1]} {c} to {ni.get(h, 0)}" for h, c in sorted(oi.items()) if ni.get(h, 0) < c]
-    added = [f"{h.rsplit('/', 1)[-1]} +{c - oi.get(h, 0)}" for h, c in sorted(ni.items()) if c > oi.get(h, 0)]
+    short = [f"{p.name(h)} {c} to {ni.get(h, 0)}" for h, c in sorted(oi.items()) if ni.get(h, 0) < c]
+    added = [f"{p.name(h)} +{c - oi.get(h, 0)}" for h, c in sorted(ni.items()) if c > oi.get(h, 0)]
     p.add("Content", "Content types carried over", len(oi), len(oi) - len(short), DIFFERENT if short else SAME,
           ("Fewer in Ultra: " + "; ".join(short) + ". " if short else "")
           + ("Added by conversion: " + "; ".join(added) + "." if added else ""))
@@ -505,9 +510,10 @@ CHECKS = (check_copy_task, check_members, check_content_counts, check_content_ty
           check_learner_records, check_scorm, check_hidden_columns)
 
 
-def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_post: set):
+def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_post: set,
+                   labels: dict | None = None):
     """Return (checks, learner_diffs) for one Original and its copy."""
-    p = Pair(o, n, base, post, ran_base, ran_post)
+    p = Pair(o, n, base, post, ran_base, ran_post, labels=labels or {})
     if not _one(post, "S1", n):
         p.add("Course", "Copy exists", o, "not found", ACTION, f"No course with the ID {n}.")
         return p.checks, p.diffs

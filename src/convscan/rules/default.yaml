@@ -16,6 +16,14 @@ not_checked_by_sql:
 
 # Plain names shown in reports in place of system values (used when a rule lists examples).
 labels:
+  resource/x-bb-folder: Folder
+  resource/x-bb-document: Document
+  resource/x-bb-asmt-test-link: Test
+  resource/x-bb-assignment: Assignment
+  resource/x-bb-blankpage: Blank page
+  resource/x-bb-externallink: Web link
+  resource/x-bb-forumlink: Discussion link
+  resource/x-plugin-scormengine: SCORM package
   resource/x-bb-wiki: Wiki
   resource/x-bb-bloglink: Blog
   resource/x-bb-achievement: Achievement
