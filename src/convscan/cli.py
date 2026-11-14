@@ -64,6 +64,11 @@ def cmd_post(a, cfg):
     out = _new_out(a.out)
     stmts = kit.statements(kit.load_template(), scope.copies_sql(), scope.suffix, pairs_sql=scope.pairs_sql(),
                            skip=_skip(a, cfg) | {"S0"})
+    # The Originals as they are now: learners keep working after the pre-scan, so the compare
+    # accepts a copy value that matches either the baseline or the Original now.
+    stmts += [(f"{label}_now", sql) for label, sql in
+              kit.statements(kit.load_template(), scope.originals_sql(), scope.suffix,
+                             only=kit.NOW, skip=_skip(a, cfg))]
     print(f"post-scan, {scope.describe()}, {len(stmts)} queries -> {out}")
     runner = DdaRunner(cfg["statement_timeout_s"])
     run_kit(runner, stmts, out, {"mode": "post", "name": out.name, "scope": scope.describe(),

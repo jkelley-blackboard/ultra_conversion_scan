@@ -205,6 +205,28 @@ rules:
 
   # --- To check: unknown or not testable by SQL ---------------------------------------------
 
+  - id: content_type_untested
+    title: Content types not yet covered by conversion testing
+    source: S3c
+    # Types seen converting correctly in testing (demo, 2026-11-14). Add a type here only after a
+    # test conversion shows it arrives and works in Ultra.
+    where:
+      cnthndlr_handle__ne:
+        - resource/x-plugin-scormengine
+        - resource/x-bb-forumlink
+        - resource/x-bb-folder
+        - resource/x-bb-document
+        - resource/x-bb-asmt-test-link
+        - resource/x-bb-externallink
+        - resource/x-bb-assignment
+        - resource/x-bb-blankpage
+    measure: sum(items)
+    severity: 0
+    known: false
+    examples: cnthndlr_handle
+    says: "{value} item(s) of {n} content type(s) not yet covered by conversion testing: {examples}."
+    action: Convert one example in a test course and check it in Ultra before this course converts.
+
   - id: test_exceptions
     title: Test exceptions (extra time or attempts)
     source: S12b

@@ -24,13 +24,46 @@ def _eq(a, b):
     return a == b
 
 
+_TYPO = str.maketrans({"–": "-", "—": "-", "‘": "'", "’": "'", "“": '"', "”": '"'})
+
+
 def norm(title) -> str:
-    """Conversion strips HTML from titles ('<u>Chapter 1</u>' -> 'Chapter 1'): compare without it."""
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]*>", "", str(title or ""))).strip().lower()
+    """Conversion strips HTML from titles ('<u>Chapter 1</u>' -> 'Chapter 1') and plain-texts dashes
+    and curly quotes: compare without either. Matches the normalization in the M2 SQL."""
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]*>", "", str(title or "")).translate(_TYPO)).strip().lower()
 
 
 # Ultra keeps one overall grade, so the Original's weighted total has no counterpart.
 _WEIGHTED = re.compile(r"weighted ?total|OutcomeDefinition\.WeightedTotal", re.I)
+
+
+# Content types that conversion renames: compare them under one name.
+_HANDLER = {"resource/x-bb-assignment": "resource/x-bb-asmt-test-link", "resource/x-bb-lesson": "resource/x-bb-folder",
+            "resource/x-bb-blankpage": "resource/x-bb-document"}   # a blank page becomes a folder plus a document
+
+# Discussion links are renamed to the forum's own name in Ultra, so they can't be matched by title.
+# Their number is compared in "Discussion links" and their conditions in the release-rule checks.
+_RENAMED_BY_CONVERSION = {"resource/x-bb-forumlink"}
+
+
+def _handler(h):
+    return _HANDLER.get(h, h or "")
+
+
+def _list(items, limit=8):
+    items = [str(i) for i in items]
+    return "; ".join(items[:limit]) + (f" (and {len(items) - limit} more)" if len(items) > limit else "")
+
+
+def _crit_sig(r) -> tuple:
+    """One release condition, normalized for comparing across a conversion. Index 9 is the groups."""
+    def num(v):
+        return "" if v in (None, "") else f"{float(v):g}"
+    return (norm(r.get("item_title")), r.get("crit_type") or "", r.get("negate_ind") or "",
+            num(r.get("min_score")), num(r.get("max_score")),
+            str(r.get("start_date") or "")[:16], str(r.get("end_date") or "")[:16],
+            norm(r.get("gate_column_title")), norm(r.get("reviewed_item_title")),
+            norm(r.get("groups_named")), str(r.get("users_named") or ""))
 
 
 def _ext(pk):
@@ -73,14 +106,21 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
             add("Course", "Failed system tasks", "", len(failed), ACTION,
                 "; ".join(f"{t.get('task_type')}: {(t.get('results_text') or '')[:120]}" for t in failed))
 
-    # Members
+    # Members (a copy value matching the Original now, after later enrollments, is fine)
     if both("S2"):
         a, b = _one(base, "S2", o), _one(post, "S2", n)
+        now = _one(post, "S2_now", o) if "S2_now" in ran_post else None
         for col, label in (("members", "Active members"), ("students", "Students"),
                            ("in_progress", "Students in progress"), ("completed", "Students completed"),
                            ("students_disabled", "Disabled students")):
             ov, nv = a.get(col) or 0, b.get(col) or 0
-            add("Members", label, ov, nv, SAME if ov == nv else DIFFERENT)
+            if ov == nv:
+                add("Members", label, ov, nv, SAME)
+            elif now is not None and (now.get(col) or 0) == nv:
+                add("Members", label, ov, nv, EXPECTED, f"Matches the Original now ({nv}): changed after the pre-scan.")
+            else:
+                add("Members", label, ov, nv, DIFFERENT,
+                    f"The Original now has {now.get(col) or 0}." if now is not None else "")
 
     # Content
     if both("S3"):
@@ -97,6 +137,58 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
                 add("Content", label, ov, nv, EXPECTED, "Conversion adds folders.")
             else:
                 add("Content", label, ov, nv, DIFFERENT)
+
+    # Content types: every type in the Original should still be there in at least the same number
+    if both("S3c"):
+        def inventory(rows):
+            inv = {}
+            for r in rows:
+                h = _handler(r.get("cnthndlr_handle"))
+                inv[h] = inv.get(h, 0) + (r.get("items") or 0)
+            return inv
+        oi, ni = inventory(_rows(base, "S3c", o)), inventory(_rows(post, "S3c", n))
+        short = [f"{h.rsplit('/', 1)[-1]} {c} to {ni.get(h, 0)}" for h, c in sorted(oi.items()) if ni.get(h, 0) < c]
+        added = [f"{h.rsplit('/', 1)[-1]} +{c - oi.get(h, 0)}" for h, c in sorted(ni.items()) if c > oi.get(h, 0)]
+        add("Content", "Content types carried over", len(oi), len(oi) - len(short), DIFFERENT if short else SAME,
+            ("Fewer in Ultra: " + "; ".join(short) + ". " if short else "")
+            + ("Added by conversion: " + "; ".join(added) + "." if added else ""))
+
+    # Item availability: anything hidden in the Original must stay hidden
+    if both("S3b"):
+        def avail(rows):
+            out = {}
+            for r in rows:
+                if r.get("cnthndlr_handle") in _RENAMED_BY_CONVERSION:
+                    continue
+                key = (norm(r.get("title")), _handler(r.get("cnthndlr_handle")))
+                y, n_ = out.get(key, (0, 0))
+                out[key] = (y + (r.get("available_ind") != "N"), n_ + (r.get("available_ind") == "N"))
+            return out
+        oa, na = avail(_rows(base, "S3b", o)), avail(_rows(post, "S3b", n))
+        titles = {(norm(r.get("title")), _handler(r.get("cnthndlr_handle"))): re.sub(r"<[^>]*>", "", r.get("title") or "")
+                  for r in _rows(base, "S3b", o)}
+        shown, hidden, missing = [], [], []
+        for key, (oy, on) in oa.items():
+            if key not in na:
+                missing.append(titles[key])
+                continue
+            ny, nn = na[key]
+            if on and nn < on:
+                shown.append(titles[key])
+            elif nn > on and ny < oy:
+                hidden.append(titles[key])
+        if shown:
+            add("Content", "Hidden items now visible to learners", sum(v[1] for v in oa.values()), "", ACTION,
+                "Visible in Ultra but hidden in the Original: " + _list(shown) + ". Hide them before release.")
+        else:
+            add("Content", "Hidden items still hidden", sum(v[1] for v in oa.values()),
+                sum(v[1] for v in oa.values()), SAME)
+        if hidden:
+            add("Content", "Visible items now hidden", "", len(hidden), DIFFERENT,
+                "Hidden in Ultra but visible in the Original: " + _list(hidden) + ".")
+        if missing:
+            add("Content", "Items not found by title in Ultra", len(oa), len(oa) - len(missing), DIFFERENT,
+                _list(missing) + ". Conversion may have renamed or merged these: check them.")
 
     # Grade columns
     if both("S4"):
@@ -140,7 +232,29 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
             add("Release rules", "Gated items still gated", len(o_items), len(o_items), SAME,
                 "" if len(orows) == len(nrows) else
                 f"Conditions {len(orows)} in the Original, {len(nrows)} in Ultra: conversion repeats some on the "
-                "folders it adds. Compare item by item before release.")
+                "folders it adds.")
+        # Condition by condition: the same item, type, score range, dates, gate column, groups and users
+        o_sigs = {_crit_sig(r): r for r in orows}
+        n_sigs = {_crit_sig(r) for r in nrows}
+        n_no_groups = {s[:9] + ("",) + s[10:] for s in n_sigs}
+        lost = [r for s, r in o_sigs.items() if s not in n_sigs]
+        group_only = [r for r in lost if r.get("groups_named") and
+                      _crit_sig(r)[:9] + ("",) + _crit_sig(r)[10:] in n_no_groups]
+        other = [r for r in lost if r not in group_only]
+        if not lost:
+            add("Release rules", "Conditions carried over exactly", len(o_sigs), len(o_sigs), SAME,
+                "Same item, type, score range, dates, gate column, groups and named learners.")
+        else:
+            note = []
+            if other:
+                note.append(f"{len(other)} changed or missing, on: "
+                            + _list(sorted({r.get('item_title') for r in other})) + ".")
+            if group_only:
+                note.append(f"{len(group_only)} lost only their group(s), on: "
+                            + _list(sorted({r.get('item_title') for r in group_only}))
+                            + ". The group repair should restore these.")
+            add("Release rules", "Conditions carried over exactly", len(o_sigs), len(o_sigs) - len(lost),
+                DIFFERENT if other else ACTION, " ".join(note))
 
     # Partial credit
     if both("S5c"):
@@ -183,7 +297,8 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
     cmap = column_map(post, o)
     if both("S7") and "M2" in ran_post:
         new_rows = {(r["users_pk1"], r["col_pk"]): r for r in _rows(post, "S7", n)}
-        compared = differing = missing = unmapped = 0
+        now_rows = {(r["users_pk1"], r["col_pk"]): r for r in _rows(post, "S7_now", o)}
+        compared = differing = missing = unmapped = since = 0
         learners = set()
         for r in _rows(base, "S7", o):
             m = cmap.get(r["col_pk"])
@@ -200,6 +315,10 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
                               "new_col_pk": new_col or "", "field": "record", "original": "present", "copy": "missing"})
                 continue
             bad = [f for f in S7_FIELDS if not _eq(r.get(f), other.get(f))]
+            now = now_rows.get((r["users_pk1"], r["col_pk"]))
+            if bad and now is not None and all(_eq(now.get(f), other.get(f)) for f in S7_FIELDS):
+                since += 1   # the learner worked after the pre-scan, and the copy has that work
+                continue
             if bad:
                 differing += 1
                 learners.add(r["users_pk1"])
@@ -214,6 +333,8 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
         if unmapped:
             note.append(f"{unmapped} sit in grade columns the ID map couldn't match one to one: "
                         "resolve those columns, then re-run.")
+        if since:
+            note.append(f"{since} changed after the pre-scan (learner activity) and match the Original now.")
         add("Learner records", "Grade and attempt records matching", compared,
             compared - differing - missing - unmapped, status, " ".join(note))
     else:
@@ -222,6 +343,8 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
     # SCORM runtime state
     if both("S10"):
         new_rows = {(r["users_pk1"], norm(r["scorm_title"]), r["attempt_no"]): r for r in _rows(post, "S10", n)}
+        now_md5 = {(r["users_pk1"], norm(r["scorm_title"]), r["attempt_no"]): r.get("runtime_md5")
+                   for r in _rows(post, "S10_now", o)}
         compared = same = unsaved = 0
         for r in _rows(base, "S10", o):
             compared += 1
@@ -232,8 +355,9 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
                               "original": "present", "copy": "missing"})
             elif not r.get("runtime_md5") or not other.get("runtime_md5"):
                 unsaved += 1
-            elif r["runtime_md5"] == other["runtime_md5"]:
-                same += 1
+            elif r["runtime_md5"] == other["runtime_md5"] or \
+                    now_md5.get((r["users_pk1"], norm(r["scorm_title"]), r["attempt_no"])) == other["runtime_md5"]:
+                same += 1   # same as at the pre-scan, or same as the Original now (learner kept working)
             else:
                 diffs.append({"course_id": o, "users_pk1": r["users_pk1"], "orig_col_pk": "", "new_col_pk": "",
                               "field": f"SCORM {r['scorm_title']} attempt {r['attempt_no']}",
