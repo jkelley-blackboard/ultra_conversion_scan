@@ -343,25 +343,35 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
     # SCORM runtime state
     if both("S10"):
         new_rows = {(r["users_pk1"], norm(r["scorm_title"]), r["attempt_no"]): r for r in _rows(post, "S10", n)}
-        now_md5 = {(r["users_pk1"], norm(r["scorm_title"]), r["attempt_no"]): r.get("runtime_md5")
-                   for r in _rows(post, "S10_now", o)}
-        compared = same = unsaved = 0
+        def state(r):
+            """The resume-state fingerprint: from the engine's tables if written out, else from its blob."""
+            if r is None:
+                return None
+            return ("rt", r["runtime_md5"]) if r.get("runtime_md5") else \
+                   (("blob", r["blob_md5"]) if r.get("blob_md5") else None)
+
+        now_state = {(r["users_pk1"], norm(r["scorm_title"]), r["attempt_no"]): state(r)
+                     for r in _rows(post, "S10_now", o)}
+        compared = same = unsaved = from_blob = 0
         for r in _rows(base, "S10", o):
             compared += 1
-            other = new_rows.get((r["users_pk1"], norm(r["scorm_title"]), r["attempt_no"]))
+            key = (r["users_pk1"], norm(r["scorm_title"]), r["attempt_no"])
+            other = new_rows.get(key)
             if other is None:
                 diffs.append({"course_id": o, "users_pk1": r["users_pk1"], "orig_col_pk": "", "new_col_pk": "",
                               "field": f"SCORM {r['scorm_title']} attempt {r['attempt_no']}",
                               "original": "present", "copy": "missing"})
-            elif not r.get("runtime_md5") or not other.get("runtime_md5"):
+                continue
+            a, b = state(r), state(other)
+            if a is None or b is None or a[0] != b[0]:
                 unsaved += 1
-            elif r["runtime_md5"] == other["runtime_md5"] or \
-                    now_md5.get((r["users_pk1"], norm(r["scorm_title"]), r["attempt_no"])) == other["runtime_md5"]:
+            elif a == b or now_state.get(key) == b:
                 same += 1   # same as at the pre-scan, or same as the Original now (learner kept working)
+                from_blob += a[0] == "blob"
             else:
                 diffs.append({"course_id": o, "users_pk1": r["users_pk1"], "orig_col_pk": "", "new_col_pk": "",
-                              "field": f"SCORM {r['scorm_title']} attempt {r['attempt_no']}",
-                              "original": r["runtime_md5"], "copy": other["runtime_md5"]})
+                              "field": f"SCORM {r['scorm_title']} attempt {r['attempt_no']} resume state",
+                              "original": r.get("blob_locations") or a[1], "copy": other.get("blob_locations") or b[1]})
         bad = compared - same - unsaved
         if bad:
             status = DIFFERENT
@@ -371,8 +381,10 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
             status = SAME
         add("SCORM", "SCORM records with the same resume state", compared, same, status,
             ("No SCORM records in this course." if not compared else "")
-            + (f"{unsaved} have no resume state in the reporting tables yet (the player still holds it), "
-             "so they were not compared: check those in the learner view. " if unsaved else "")
+            + (f"Bookmark, suspend data, status and score compared ({from_blob} from the engine's runtime "
+               "record). " if same else "")
+            + (f"{unsaved} could not be compared (no readable resume state on one side): check those in the "
+               "learner view. " if unsaved else "")
             + (f"{bad} differ or are missing." if bad else ""))
     else:
         add("SCORM", "SCORM resume state", "", "", NOT_CHECKED, "Needs S10 on both runs.")

@@ -71,6 +71,12 @@ def run_kit(runner: Runner, stmts: list[tuple[str, str]], out: pathlib.Path, met
             results[label] = {"error": str(e).strip().splitlines()[0], "seconds": round(time.time() - t0, 1)}
             print(f"  {label:<5} ERROR  {results[label]['error']}")
             continue
+        if "runtime_data" in cols:   # SCORM blobs: keep a fingerprint, never the learner's raw state
+            from .scorm import summarize
+            i = cols.index("runtime_data")
+            extra = ["blob_md5", "blob_scos", "blob_locations"]
+            rows = [tuple(r[:i]) + tuple(r[i + 1:]) + tuple(summarize(r[i])[k] for k in extra) for r in rows]
+            cols = cols[:i] + cols[i + 1:] + extra
         with open(data / f"{label}.csv", "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             w.writerow(cols)
@@ -101,7 +107,8 @@ def _coerce(v: str):
 
 
 # Text columns stay strings even when they look like numbers (course IDs like 0042, a title "2024").
-_TEXT = ("course_id", "title", "name", "path", "md5", "weights", "text", "handle", "named", "drawn_from")
+_TEXT = ("course_id", "title", "name", "path", "md5", "weights", "text", "handle", "named", "drawn_from",
+         "locations")
 
 
 def load_run(path: pathlib.Path) -> tuple[dict, dict[str, list[dict]]]:

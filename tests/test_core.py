@@ -73,6 +73,24 @@ def test_rule_evaluation():
     assert [n["id"] for n in not_checked] == ["c"]
 
 
+def _blob(reg_id, location):
+    import struct
+    import zlib
+    xml = (f'<RunTimeData RegistrationId="{reg_id}"><Activity ItemIdentifier="sco1" ActivityAttemptCount="1" dbid="0">'
+           f'<ActivityRunTime ActivityId="1" Location="{location}" SuspendData="abc" CompletionStatus="1" '
+           f'ScoreRaw="85"></ActivityRunTime></Activity></RunTimeData>').encode()
+    return struct.pack("<I", len(xml)) + zlib.compress(xml)
+
+
+def test_scorm_blob_fingerprint_ignores_identity_but_not_state():
+    from convscan.scorm import summarize
+    a, b, c = summarize(_blob("reg-A", "page5")), summarize(_blob("reg-B", "page5")), summarize(_blob("reg-A", "page3"))
+    assert a["blob_md5"] == b["blob_md5"]          # a copy has a new registration id: same state
+    assert a["blob_md5"] != c["blob_md5"]          # a different bookmark is a different state
+    assert a["blob_locations"] == "page5" and a["blob_scos"] == 1
+    assert summarize(None)["blob_md5"] == ""
+
+
 def test_filters():
     row = {"a": 3, "b": None, "c": "resource/x-bb-forumlink"}
     assert rules.matches(row, {"a__gt": 2, "b__null": True, "c__startswith": "resource/"})

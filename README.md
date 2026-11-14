@@ -205,9 +205,11 @@ now) and held in memory. Suggested, most effective first:
 
 **Coverage gaps** found in the demo test:
 
-- SCORM resume position: none of the 14 demo records had state in `scormactivityrt` (the player held
-  it in `scormregistration.runtime_data`). Either decode that blob or make a learner-view sample a
-  standard step.
+- SCORM resume position: **closed 2026-11-14.** None of the 14 demo records had state in
+  `scormactivityrt`; it was in `scormregistration.runtime_data` (4-byte length plus zlib-compressed
+  RunTimeData XML). `scorm.py` decodes it as S10 is read and keeps only a fingerprint and the
+  bookmarks. All 14 matched across the conversion. At scale the blobs add about 600 bytes per learner
+  per package to S10's transfer (fold into the fingerprint work above).
 - Calculated column values (totals, module scores) aren't stored, and their formulas aren't in
   documented tables: check computed values through the REST gradebook API.
 - Submitted files, feedback and rubrics aren't compared.

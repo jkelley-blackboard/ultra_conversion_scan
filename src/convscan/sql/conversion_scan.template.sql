@@ -64,7 +64,7 @@ with need(t, c) as (values
  ('qti_block_mapping','question_block_pk1'),('qti_block_mapping','question_pk1'),
  ('course_assessment','time_limit'),('course_assessment','timer_completion'),('course_assessment','proctoring_service_handle'),
  ('course_assessment','req_secure_browser_take_ind'),('user_test_option','course_users_pk1'),('user_test_option','groups_pk1'),
- ('scormpackage','api_course_id'),('scormregistration','api_registration_id'),('scormregistration','suspended_activity_id'),
+ ('scormpackage','api_course_id'),('scormregistration','api_registration_id'),('scormregistration','suspended_activity_id'),('scormregistration','runtime_data'),
  ('scormactivity','scorm_registration_id'),('scormactivityrt','location'),('scormactivityrt','suspend_data'),
  ('scormbbpackageinfo','max_attempts'),('scormpackageproperties','time_limit'),
  ('forum_main','confmain_pk1'),('msg_main','forummain_pk1'),
@@ -538,8 +538,12 @@ order by s.course_id, cc.title, ar.title, ac.crit_type;
 --      scormregistration.suspended_activity_id per registration.
 --      Compare runtime_md5 between Original and copy: equal means the learner resumes in
 --      the same place with the same state. A NULL runtime (scos is NULL) means the engine
---      has not yet written the state out of scormregistration.runtime_data; treat it as
---      "not persisted", not as a difference.
+--      has not yet written the state out of scormregistration.runtime_data, which was the
+--      case for every record in the 2026-11-14 demo test. That blob is 4 bytes of length
+--      plus a zlib-compressed RunTimeData XML document with the same fields per SCO
+--      (Location, SuspendData, statuses, scores). It is returned raw here: convscan
+--      decodes it while reading and writes only a fingerprint (blob_md5) and the bookmarks.
+--      Run through another tool, drop the runtime_data column if it can't decode it.
 --      Learners are matched by users_pk1 taken from api_registration_id
 --      ('<content_id>-<user_id>').
 -- ===========================================================================
@@ -551,7 +555,7 @@ pkg as (
   join scormpackage p     on p.api_course_id = '_' || cc.pk1 || '_1'),
 reg as (
   select pkg.course_id, pkg.crs_pk, pkg.content_pk, pkg.scorm_title, r.scorm_registration_id,
-         r.instance_id, r.completed_dt_utc, r.suspended_activity_id,
+         r.instance_id, r.completed_dt_utc, r.suspended_activity_id, r.runtime_data,
          split_part(r.api_registration_id, '-', 2) as user_ext
   from pkg join scormregistration r on r.scorm_package_id = pkg.scorm_package_id),
 rt as (
@@ -571,7 +575,8 @@ select reg.course_id, cu.users_pk1, cu.available_ind as learner_available, reg.c
   reg.instance_id + 1                      as attempt_no,
   reg.completed_dt_utc,
   reg.suspended_activity_id is not null    as suspended,
-  rt.scos, rt.scos_with_location, rt.scos_with_suspend, rt.runtime_md5
+  rt.scos, rt.scos_with_location, rt.scos_with_suspend, rt.runtime_md5,
+  reg.runtime_data           -- convscan decodes this and keeps only a fingerprint (blob_md5)
 from reg
 join course_users cu on cu.crsmain_pk1 = reg.crs_pk and '_' || cu.users_pk1 || '_1' = reg.user_ext
                     and cu.role = 'S' and cu.row_status = 0
