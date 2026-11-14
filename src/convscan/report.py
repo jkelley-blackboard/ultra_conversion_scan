@@ -74,11 +74,12 @@ def _ran(run: dict) -> set[str]:
     return {k for k, v in run.get("queries", {}).items() if "error" not in v}
 
 
-def render_pre(run_dir: pathlib.Path, run: dict, data: dict, cfg: dict) -> list[pathlib.Path]:
+def render_pre(run_dir: pathlib.Path, run: dict, data: dict, cfg: dict,
+               reports_dir: pathlib.Path | None = None) -> list[pathlib.Path]:
     doc = rules.load_rules(cfg["rules"])
     env = _env(cfg["templates"])
-    out = run_dir / "reports"
-    out.mkdir(exist_ok=True)
+    out = reports_dir or run_dir / "reports"
+    out.mkdir(parents=True, exist_ok=True)
     ran = _ran(run)
     common = {"run": run, "cfg": cfg, "version": __version__,
               "not_checked_by_sql": doc.get("not_checked_by_sql", []), "severity": rules.SEVERITY,
@@ -100,11 +101,11 @@ def render_pre(run_dir: pathlib.Path, run: dict, data: dict, cfg: dict) -> list[
 
 
 def render_post(run_dir: pathlib.Path, run: dict, data: dict, base_run: dict, base: dict,
-                cfg: dict) -> list[pathlib.Path]:
+                cfg: dict, reports_dir: pathlib.Path | None = None) -> list[pathlib.Path]:
     env = _env(cfg["templates"])
     labels = rules.load_rules(cfg["rules"]).get("labels") or {}   # plain names for content types
-    out = run_dir / "reports"
-    out.mkdir(exist_ok=True)
+    out = reports_dir or run_dir / "reports"
+    out.mkdir(parents=True, exist_ok=True)
     ran_base, ran_post = _ran(base_run), _ran(run)
     common = {"run": run, "base_run": base_run, "cfg": cfg, "version": __version__,
               "settings": site_settings(data)}

@@ -25,7 +25,7 @@ a hand-off report and an ID map for two invented courses, one with typical losse
 and connect, choosing courses, the five steps of a batch, reading each report, looking after the data,
 and what to do when something goes wrong. This README is for maintaining the tool.
 
-The five steps, in short: `convscan check` once per site; `convscan pre` before the batch (its data is
+The five steps, in short, after `convscan init` writes a config: `convscan check` once per site; `convscan pre` before the batch (its data is
 the baseline); `convscan tasks --wait` during the copy; `convscan post` against the baseline after it;
 `convscan post` again after repairs.
 
@@ -179,8 +179,11 @@ counts only.
 No query selects a name, username or email (the SQL header says so, and `convscan sql` prints exactly
 what runs). `--no-learner` leaves out the per-learner queries altogether.
 
-A run folder holds `run.json`, `data/*.csv` (one per query; post-scans add `S2_now`, `S7_now` and
-`S10_now`, the Originals re-read) and `reports/`. Git ignores `runs/`. What the scan can't check is
+A run has two folders (`paths.py`): its data folder, `data_dir/<name>`, holds `run.json` and
+`data/*.csv` (one per query; post-scans add `S2_now`, `S7_now` and `S10_now`, the Originals re-read);
+its reports folder, `reports_dir/<name>`, holds the reports, `idmap.csv` and a copy of `run.json`.
+`run.json` records the reports folder, so `render` writes back to it. A path given as `--out` keeps
+the older single-folder layout. Git ignores `runs/`. What the scan can't check is
 listed in USER_GUIDE.md and in each report's "Not checked" section.
 
 ## Planned work
@@ -234,7 +237,8 @@ about 315,000 learner rows) is read three times by a post-scan and held in memor
 ```
 src/convscan/
   cli.py          the commands
-  config.py       defaults and the YAML config
+  config.py       defaults, the YAML config, finding it, and the starter config for init
+  paths.py        where a run's data and reports go; the synced-folder warning
   scope.py        which courses: manifest or hierarchy node
   kit.py          loads the SQL file, fills in the courses, splits it into labeled queries
   runner.py       the database connection, running the queries, saving and loading runs
@@ -248,6 +252,9 @@ src/convscan/
 tests/
   test_core.py        the pieces: splitting the SQL, choosing courses, rules, SCORM decoding
   test_end_to_end.py  renders pre and post reports from invented runs and checks what they say
+  test_connection.py  connection settings, and the password never in a file
+  test_paths.py       data and reports folders, the synced-folder warning, finding the config, init
+  test_replica.py     reading the replica lag
   sample_data.py      those invented runs (two courses, no real data)
 examples/
   manifest.csv        a manifest to copy

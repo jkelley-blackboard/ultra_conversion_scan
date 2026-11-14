@@ -45,26 +45,18 @@ same way.
 convscan reads the LMS database through Direct Data Access (DDA). You need the site's DDA connection
 details and a read-only DDA user, which Blackboard provides with DDA access.
 
-1. Copy [config.example.yaml](config.example.yaml) to a new file for the site, for example
-   `config_mysite.yaml`, and fill in the `db:` block:
-
-   ```yaml
-   db:
-     host: the DDA host name
-     port: 5432
-     dbname: the site's database name
-     user: your read-only DDA user
-   prepared_for: Your Institution
-   ```
-
-2. Pass the file to every command with `--config`, before the command name:
-
-   ```
-   convscan --config config_mysite.yaml check
-   ```
-
+1. Run `convscan init`. It asks for the host, port, database name, user and the institution's name,
+   and writes them to `~/convscan/config.yaml` (your home folder). Leave anything you don't know blank
+   and fill it in later; the file is plain text.
+2. Run `convscan check`. convscan finds that config by itself, so you don't need `--config`.
 3. convscan asks for the DDA password each time it connects. What you type isn't shown, and it isn't
    saved anywhere.
+
+**More than one site?** Give each its own config with `convscan init config_mysite.yaml`, and pass it
+with `--config` before the command name: `convscan --config config_mysite.yaml check`. convscan looks
+for a config in this order: `--config`; the `CONVSCAN_CONFIG` environment variable; `convscan.yaml` in
+the current folder; `~/convscan/config.yaml`. It says which one it used. The full list of settings,
+with comments, is [config.example.yaml](config.example.yaml).
 
 **Don't put the password in the config file:** convscan refuses to run if you do. Config files get
 copied and shared, and a password in one is easy to leak.
@@ -85,8 +77,8 @@ Windows profile, and not in a shell startup file such as `~/.zshrc` on macOS.
 **Environment variables instead of a config file:** `DDA_HOST`, `DDA_PORT`, `DDA_DBNAME` and `DDA_USER`
 work too, and override the config file when both are set. That suits a machine set up for one site.
 
-Run `convscan --config config_mysite.yaml check` to test the connection. If it can't connect, it says
-which host, database and user it tried, and why.
+`convscan check` tests the connection. If it can't connect, it says which host, database and user it
+tried, and why.
 
 ### Configure (optional)
 
@@ -95,6 +87,8 @@ The same config file holds the other settings. Every setting is optional:
 | Setting | Default | What it does |
 |---|---|---|
 | `db` | none | The connection, above |
+| `data_dir` | `~/convscan/data` | Where each run's data goes, including learner-level records. Keep it local (see "Looking after the data") |
+| `reports_dir` | `~/convscan/reports` | Where each run's reports go. Point it at a shared folder if the reports are shared that way |
 | `prepared_for` | `TODO institution name` | The name at the top of every report. Set this |
 | `new_id_suffix` | `-7777` | Added to an Original's course ID to find its copy (see "The new course ID") |
 | `max_course_id_length` | 15 | Flags new course IDs longer than this (0 switches the check off) |
@@ -135,13 +129,16 @@ can't take a hyphen, and the pre-conversion report flags a new ID that's already
 | Step | When | Command |
 |---|---|---|
 | 1. Check the site | Once per site | `convscan check` |
-| 2. Scan the Originals | Before the batch, and again at the freeze | `convscan pre --manifest batch01.csv --out runs/batch01_pre` |
+| 2. Scan the Originals | Before the batch, and again at the freeze | `convscan pre --manifest batch01.csv --out batch01_pre` |
 | 3. Watch the copies | During the copy and convert | `convscan tasks --manifest batch01.csv --wait` |
-| 4. Scan the copies | When the copies are done | `convscan post --manifest batch01.csv --baseline runs/batch01_pre --out runs/batch01_post` |
-| 5. Scan again after repairs | After fixing what the hand-off report lists | `convscan post --manifest batch01.csv --baseline runs/batch01_pre --out runs/batch01_post2` |
+| 4. Scan the copies | When the copies are done | `convscan post --manifest batch01.csv --baseline batch01_pre --out batch01_post` |
+| 5. Scan again after repairs | After fixing what the hand-off report lists | `convscan post --manifest batch01.csv --baseline batch01_pre --out batch01_post2` |
 
-Add `--config config_mysite.yaml` before the command name to use your settings, for example
-`convscan --config config_mysite.yaml pre ...`. Paths use forward slashes, which work on Windows too.
+`--out` names the run. Its data goes to `data_dir/batch01_pre` and its reports to
+`reports_dir/batch01_pre`; `--baseline` takes the pre-scan's name. A name can't be reused, so nothing is
+overwritten. (A folder path also works for `--out`, `--baseline` and `render`, and keeps data and
+reports together in that folder, with the reports in its `reports/` folder.) Paths use forward
+slashes, which work on Windows too.
 
 ### 1. Check the site
 
@@ -156,7 +153,8 @@ reports with the institution: they list the decisions to make before the convers
 
 The data this scan saves becomes the **baseline** that step 4 compares against. Run it again at the
 freeze, once the courses are unavailable and just before the copy starts, so the baseline is as close
-as possible to what gets copied. Each run needs a new `--out` folder.
+as possible to what gets copied, under a new name (`batch01_freeze`), and use that name as the
+baseline in step 4.
 
 ### 3. Run the copy and convert, and watch it
 
@@ -180,7 +178,7 @@ hand-off report then warns that its losses may not be real yet.
 
 ### 5. Repair, then scan again
 
-Fix what the hand-off reports mark **Needs action**, then run `post` again into a new folder, against
+Fix what the hand-off reports mark **Needs action**, then run `post` again under a new name, against
 the same baseline. The repaired items should now read **Same**. Release the course to learners when
 the report has no "Needs action" rows left and the institution has checked what the report asks them
 to check.
@@ -189,7 +187,9 @@ to check.
 
 | Command | What it does |
 |---|---|
-| `convscan render <run folder>` | Rebuilds a run's reports from its saved data, with no database. Use it after the rules or report templates change |
+| `convscan init [file]` | Writes a starter config, asking for the connection details. Never overwrites |
+| `convscan render <run name>` | Rebuilds a run's reports from its saved data, with no database. Use it after the rules or report templates change |
+| `convscan --version` | Shows the version. Put it in any question about a report |
 | `convscan sql --manifest batch01.csv --scope original` | Prints the queries for a set of courses (`--scope copy` for the copies), to run through another tool |
 
 ### Options
@@ -202,8 +202,8 @@ to check.
 
 ## Reading the reports
 
-Each run folder has a `reports/` folder with one report per course and a `batch_summary.md` that links
-to them all.
+Each run's reports folder (`reports_dir/<run name>`) has one report per course and a
+`batch_summary.md` that links to them all.
 
 ### The pre-conversion report
 
@@ -269,19 +269,25 @@ Give the ID map to any system outside the LMS that stores course or grade column
 convscan saves no names, usernames, email addresses or student IDs. Learners appear in the saved data
 only as internal database keys, and the reports contain counts only.
 
-Each run is a folder:
+Each run writes two folders, so what's shared and what stays local never mix:
 
 ```
-runs/batch01_post/
+~/convscan/data/batch01_post/       data_dir: stays on this machine
   run.json     which courses, settings, rows and seconds per query, replica lag, any errors
   data/        one CSV per query: grade, attempt and SCORM records by internal key
-  reports/     the reports, the batch summary, and idmap.csv
+
+~/convscan/reports/batch01_post/    reports_dir: what gets shared
+  *_handoff.md, batch_summary.md, idmap.csv
+  run.json     a copy, so a report can be traced to its run (no learner data in it)
 ```
 
-- **Share the `reports/` folder.** It's what the institution and the project need.
-- **Keep `data/` where the scan ran.** It holds grade and attempt records, and for large courses it can
-  be large. Delete it once the batch is signed off, unless the project needs it kept.
-- **Never commit runs to this repo.** Git ignores `runs/`.
+- **Share the reports folder.** It's what the institution and the project need. If reports are shared
+  through a shared folder or a reports repository, set `reports_dir` to it and they land there
+  directly.
+- **Keep the data folder local.** It holds grade and attempt records, and for large courses it can be
+  large. convscan warns if `data_dir` is inside a synced folder (OneDrive, Dropbox, Google Drive,
+  iCloud, Box) or a Git repository. Delete a batch's data once it's signed off, unless the project
+  needs it kept.
 
 ## What convscan can't check
 
@@ -298,18 +304,21 @@ The reports list these under "Not checked":
 
 | Message or symptom | What it means | What to do |
 |---|---|---|
-| `No database host, dbname, user given` | No connection details were found | Fill in the `db:` block and pass the file with `--config` (see "Connect") |
+| `No database host, dbname, user given` | The config has no connection details, or wasn't found | Run `convscan init`, or fill in the `db:` block of your config (see "Connect") |
 | `Couldn't connect to ...` | Wrong details or password, or the network can't reach the host | Check the details it prints; check you're on a network allowed to reach DDA |
 | `don't put the database password in a config file` | The config file has a `password` line | Delete the line; convscan asks for the password instead |
 | `convscan` isn't recognized, or `command not found` | Python's scripts folder isn't on `PATH` | Use `python -m convscan ...` (Windows) or `python3 -m convscan ...` (macOS, Linux) |
 | `pip: command not found` on macOS | macOS names it `pip3` | Use `pip3`, or `python3 -m pip` |
-| `... already holds a run; choose a new --out folder` | Runs are never overwritten | Give a new `--out` folder |
+| `... already holds a run` or `... already holds reports` | Runs are never overwritten | Give a new `--out` name |
+| `WARNING: learner-level data will be written to ...` | `data_dir` is in a synced folder or a Git repository | Set `data_dir` in your config to a local folder |
+| `no pre-scan run at ...` | `--baseline` doesn't name a pre-scan | Use the pre-scan's `--out` name, with the same config |
+| `No database host, dbname, user given` straight after install | No config found | Run `convscan init` |
 | `table/column(s) MISSING` from `check` | The site's database differs from what the queries expect | Don't run `pre` or `post` until the queries are updated for this site |
 | `the reporting database is more than 300 s behind` | The replica is catching up after the copies | Wait and run `post` again |
 | `replica lag: could not read the replica lag` | The DDA user can't see replication status | `post` still runs; check the copies look complete before trusting the losses |
 | `no copy task yet` from `tasks` | The copy hasn't started for that course, or the new course ID in the manifest is wrong | Check the copy was started, and the copy's real course ID |
 | A query shows an error in the run output, or in `run.json` | It failed or timed out (`statement_timeout_s`) | The checks that need it show as "Not checked". Raise the timeout, or scan large courses on their own |
-| Many "Different" rows straight after a copy | The copies may not have finished replicating | Run `post` again into a new folder |
+| Many "Different" rows straight after a copy | The copies may not have finished replicating | Run `post` again under a new name |
 
 ## Terms
 
