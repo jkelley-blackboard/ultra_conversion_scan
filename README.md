@@ -181,9 +181,39 @@ are listed in the header of the SQL template. Run `convscan check` first on any 
 
 ## Open items
 
-- Run `check` and `pre` on a production site; demo has no real conversion copies.
+- Run `check` and `pre` on a production site. Demo conversions (four courses, 2026-11-14) have
+  2 to 10 learners each.
 - Reporting Framework runner (whether it accepts the recursive S3b, `md5` and `string_agg`, and the
   size of the per-learner results).
-- M1 (item match by title path) is not implemented; the compare matches columns by M2 and counts
-  items.
+- M1 (item match by title path) is not implemented; the compare matches columns by M2, items by
+  normalized title and type, and conditions by signature.
 - Word output through the Blackboard brand template.
+
+### Held for later (suggestions, 2026-11-14: re-examine closer to production runs)
+
+**Scale.** Courses with thousands of learners make the per-learner queries large: about 800,000 S7
+rows for 20,000 learners and 40 columns, read three times in a post-scan (baseline, copy, Original
+now) and held in memory. Suggested, most effective first:
+
+1. Fingerprint comparison: one hash per course and column (and per SCORM package) over every
+   learner's values, computed in SQL; fetch per-learner rows only for columns whose hashes differ.
+2. Re-read the Originals (`_now`) only for mismatched columns.
+3. Scan XL courses one per run, sequentially, off-peak; smaller courses batched.
+4. Stream results (server-side cursor) and compress CSVs.
+5. Drop S7b (duplicates S7) and replace the correlated subqueries in S7b and S8 with joins.
+6. Time S0 and a pre-scan on the largest production course before any batch run.
+
+**Coverage gaps** found in the demo test:
+
+- SCORM resume position: none of the 14 demo records had state in `scormactivityrt` (the player held
+  it in `scormregistration.runtime_data`). Either decode that blob or make a learner-view sample a
+  standard step.
+- Calculated column values (totals, module scores) aren't stored, and their formulas aren't in
+  documented tables: check computed values through the REST gradebook API.
+- Submitted files, feedback and rubrics aren't compared.
+- Test settings (time limit, auto-submit, attempts) are scanned but not compared; assignment
+  settings aren't scanned (S12 covers tests only).
+- Group membership after repair (S8b) and discussion post counts (S11) aren't compared.
+- Content Collection links and landing pages need an HTTP or REST check.
+- Partial credit after repair: compare each question's weights with the baseline, not just the count.
+- New course ID convention: the demo copies used `-7777` (hyphen), the plan assumed `7777`.
