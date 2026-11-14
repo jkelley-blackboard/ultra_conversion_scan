@@ -11,6 +11,11 @@ Markdown reports. There's no AI and no analyst in the loop: the same data always
 
 **You need:** Python 3.10 or later, and DDA credentials for the site (a read-only DDA user).
 
+**About DDA:** the [DDA Resource Guide](https://jkelley-blackboard.github.io/DDA/) covers the service and
+its schema, and the [DDA repository](https://github.com/jkelley-blackboard/DDA) has a SQL library, a
+machine-readable schema (`schema.json`) and tools. Check a table or column there before adding it to a
+query.
+
 **Status (2026-11-14):** working, and tested on four real copy-and-convert runs on a demo site (2 to
 10 learners per course). Not yet run on a production site.
 
