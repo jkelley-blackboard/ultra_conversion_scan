@@ -15,6 +15,7 @@ Python around it is new and has only been run against demo.
 | `convscan check` | Once per site | S0 schema check: every table and column the kit uses. Zero rows missing means the kit will run |
 | `convscan pre` | Before a batch converts | Per-course **pre-conversion report** (risks by severity, known fixes, items to check), a batch summary, and the saved baseline CSVs |
 | `convscan post` | After copy, convert and repairs | Per-course **hand-off report** (what carried over, what didn't, what still needs action), a batch summary and the **ID map** (`idmap.csv`, Original to Ultra course and grade column IDs) |
+| `convscan tasks` | During copy and convert | The copy and convert task for each course in a manifest, from the system task table (S13). `--wait` polls every minute until all have finished |
 | `convscan render` | Any time | Rebuilds the reports from a saved run, with no database, after editing rules or templates |
 | `convscan sql` | Any time | Prints the expanded SQL for one scope, for running through another tool (for example the Reporting Framework) |
 
