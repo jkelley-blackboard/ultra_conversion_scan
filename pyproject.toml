@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "convscan"
+version = "0.1.0"
+description = "Read-only pre- and post-conversion scans and reports for Original-to-Ultra course conversion in Blackboard LMS"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "psycopg2-binary>=2.9",
+  "PyYAML>=6.0",
+  "Jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+convscan = "convscan.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+convscan = ["sql/*.sql", "rules/*.yaml", "templates/*.j2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

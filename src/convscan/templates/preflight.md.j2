@@ -1,0 +1,68 @@
+{% set blockers = findings | selectattr("severity", "equalto", 1) | list %}
+{% set decisions = findings | selectattr("decision") | list %}
+# Pre-conversion Report: {{ c.course_id }}, {{ c.course_name }}
+
+**Prepared for:** {{ cfg.prepared_for }} | **Scan:** {{ run.finished[:10] }} | **Batch:** {{ run.name }}
+
+> Generated from the LMS reporting database by convscan {{ version }}. Figures are as of the scan. Severity: 1 blocks learners, 2 needs fixing, 3 improves the experience, 0 to check by hand.
+
+## In short
+
+{% if blockers %}
+**Not ready: {{ blockers | length }} item(s) would block learners.**
+{% for f in blockers %}
+- **{{ f.title }}:** {{ f.action }}
+{% endfor %}
+{% else %}
+**No blocking items found by the scan.**
+{% endif %}
+{% if decisions %}
+- **Decisions needed:** {{ decisions | length }} (listed at the end).
+{% endif %}
+- **Findings by severity:** {% for s in [1, 2, 3, 0] %}{{ severity[s] }} {{ findings | selectattr("severity", "equalto", s) | list | length }}{{ ", " if not loop.last }}{% endfor %}.
+
+## The course
+
+| | |
+|---|---|
+| New course ID | {{ c.new_course_id }} |
+| Available to learners now | {{ c.available }} |
+| Members | {{ c.members | n }} ({{ c.staff | n }} staff, {{ c.students | n }} students) |
+| Students in progress | {{ c.in_progress | n }} ({{ c.ip_lt30d | n }} active in the last 30 days, {{ c.ip_gt90d | n }} not for 90 days or more, {{ c.ip_never | n }} never accessed) |
+| Students completed | {{ c.completed | n }} |
+| Disabled students | {{ c.students_disabled | n }} (copied too) |
+| Content | {{ c.item_count | n }} items: {{ c.tests | n }} tests, {{ c.assignments | n }} assignments, {{ c.scorm | n }} SCORM, {{ c.forum_links | n }} discussion links, {{ c.lti_items | n }} LTI links |
+| Gated items | {{ c.gated_items | n }} |
+| Grade columns | {{ c.grade_columns | n }} |
+| Groups | {{ c.groups | n }} |
+| Partial-credit questions | {{ c.partial_credit_questions | n }} |
+| Discussion posts | {{ c.posts | n }} |
+
+## What could go wrong
+
+{% if findings %}
+| Risk | Severity | Known? | What the scan found | Action |
+|---|---|---|---|---|
+{% for f in findings %}
+| **{{ f.title }}** | {{ f.severity_label }} | {{ "Yes" if f.known else "No" }} | {{ f.says | replace("|", "/") }} | {{ f.action | replace("|", "/") }} |
+{% endfor %}
+{% else %}
+The scan found nothing in this course that the rule table flags.
+{% endif %}
+
+{% if decisions %}
+## Decisions needed
+
+{% for f in decisions %}
+{{ loop.index }}. **{{ f.title }}:** {{ f.action }}
+{% endfor %}
+
+{% endif %}
+## Not checked by this scan
+
+{% for item in not_checked_by_sql %}
+- {{ item }}
+{% endfor %}
+{% for nc in not_checked %}
+- {{ nc.title }} ({{ nc.reason }}).
+{% endfor %}

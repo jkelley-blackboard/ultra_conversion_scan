@@ -1,0 +1,10 @@
+# Copy to config.yaml (ignored by Git) and pass with --config. Every key is optional.
+# The database connection is never configured here: it comes from the DDA_* environment variables.
+
+prepared_for: TODO institution name     # shown at the top of each report
+new_id_suffix: "7777"                   # copy course_id = Original course_id + suffix
+max_course_id_length: 15                # flag new IDs longer than this (0 = no limit)
+statement_timeout_s: 900                # per query, on the database side
+learner_queries: true                   # false = skip S7, S7b, S8b, S10, S12b (same as --no-learner)
+rules: null                             # path to a rule table; null = the packaged default
+templates: null                         # folder of .md.j2 templates; null = the packaged ones

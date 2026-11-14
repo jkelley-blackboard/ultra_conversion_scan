@@ -1,0 +1,17 @@
+# Scan runs hold per-learner records: never commit them
+runs/
+*.csv
+!examples/*.csv
+
+# Local config may name a site
+config.yaml
+.env
+
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+.vscode/

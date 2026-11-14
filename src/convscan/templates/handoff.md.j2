@@ -1,0 +1,55 @@
+{% set actions = checks | selectattr("status", "equalto", "action") | list %}
+{% set different = checks | selectattr("status", "equalto", "different") | list %}
+# Conversion Hand-off Report: {{ c.course_id }}, {{ c.course_name }}
+
+**Prepared for:** {{ cfg.prepared_for }} | **Post-scan:** {{ run.finished[:10] }} | **Baseline:** {{ base_run.finished[:10] }} | **Batch:** {{ run.name }}
+
+> Generated from the LMS reporting database by convscan {{ version }}, by comparing the Ultra copy with the Original as scanned before conversion.
+
+## Summary
+
+| | |
+|---|---|
+| Course | {{ c.course_id }} → **{{ c.new_course_id }}** (Ultra) |
+| Learners | {{ c.members | n }} members, {{ c.in_progress | n }} in progress |
+| Checks | {{ statuses["same"] }} same, {{ statuses["expected"] }} expected changes, {{ statuses["different"] }} different, {{ statuses["action"] }} need action, {{ statuses["not checked"] }} not checked |
+| Status | {% if actions %}**{{ actions | length }} item(s) need action before release**{% elif different %}**Review {{ different | length }} difference(s) before release**{% else %}**Ready to verify and release**{% endif %} |
+
+{% if actions %}
+## Needs action before release
+
+{% for a in actions %}
+- **{{ a.check }}:** {{ a.note }}
+{% endfor %}
+
+{% endif %}
+## Checks
+
+| Area | Check | Original | Ultra copy | Result | Note |
+|---|---|---|---|---|---|
+{% for k in checks %}
+| {{ k.area }} | {{ k.check }} | {{ k.original | n }} | {{ k.ultra | n }} | {{ k.status | capitalize }} | {{ k.note | replace("|", "/") }} |
+{% endfor %}
+
+## ID map
+
+Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`.
+
+| Kind | Original ID | Ultra ID | Title | Attached item | Match |
+|---|---|---|---|---|---|
+{% for r in idmap[:25] %}
+| {{ r.kind }} | {{ r.orig_id }} | {{ r.new_id }} | {{ r.title | replace("|", "/") }} | {{ r.attached_item | replace("|", "/") }} | {{ r.match_status }} |
+{% endfor %}
+{% if idmap | length > 25 %}
+| | | | ({{ idmap | length - 25 }} more rows in idmap.csv) | | |
+{% endif %}
+
+{% if map_counts %}
+Grade columns by match: {% for k, v in map_counts | dictsort %}{{ k }} {{ v }}{{ ", " if not loop.last }}{% endfor %}. An ambiguous or not-found column is resolved before hand-off; columns new in Ultra can be ignored.
+{% endif %}
+
+## Not checked by this scan
+
+- What a learner sees on screen, and whether SCORM content resumes in the player.
+- Whether files linked from the Content Collection still open.
+- Systems outside the LMS that store course or grade column IDs: update them from the ID map.
