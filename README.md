@@ -218,4 +218,15 @@ now) and held in memory. Suggested, most effective first:
 - Group membership after repair (S8b) and discussion post counts (S11) aren't compared.
 - Content Collection links and landing pages need an HTTP or REST check.
 - Partial credit after repair: compare each question's weights with the baseline, not just the count.
+  The repair has to handle Multiple Choice stored as Multiple Answer in Ultra.
+- Data matching isn't behavior matching: the scan proves conditions, groups and scores carried over,
+  not that Ultra evaluates them the same way (learning-module sequencing, flattening, condition
+  logic). Pair it with a learner-view sample on each gated path.
+- Cheap rules not yet written: items deeper than the site's nesting limit (S3b has depth; S14 has
+  the limit), and undeployed tests that other tests draw from when "undeployed tests to question
+  banks" is on (pre-scan warning; the post-scan already catches lost draws).
+- Not scanned: text grade schemas (converted to points), course menu items (Ultra has no course
+  menu), assignment settings.
+- Rules never fired on real data: test exceptions, open assignment drafts, timed attempts open at
+  conversion, learner activity after the pre-scan.
 - New course ID convention: the demo copies used `-7777` (hyphen), the plan assumed `7777`.
