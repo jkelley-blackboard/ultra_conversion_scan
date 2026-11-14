@@ -46,6 +46,40 @@ rules:
     says: "{value} attempt(s) are open in {n} test(s): {examples}. An attempt still open at the freeze arrives in Ultra in progress."
     action: Ask learners to submit before the freeze. Re-run this scan at the freeze.
 
+  - id: open_assignment_attempts
+    title: Assignments started but not submitted
+    source: S7
+    where: {open__gt: 0, score_provider_handle: resource/x-bb-assignment}
+    measure: sum(open)
+    severity: 1
+    known: false
+    examples: column_title
+    says: "{value} assignment attempt(s) are in progress (saved as a draft, not submitted): {examples}."
+    action: Ask learners to submit before the freeze, or check the drafts arrive in Ultra.
+
+  - id: open_scorm_attempts
+    title: SCORM attempts in progress
+    source: S7
+    where: {open__gt: 0, score_provider_handle: resource/x-plugin-scormengine}
+    measure: sum(open)
+    severity: 0
+    known: true
+    examples: column_title
+    says: "{value} SCORM attempt(s) are in progress: {examples}. In testing these resumed in Ultra, but the scan can't always see the saved position."
+    action: Check a sample of these learners resume in the right place in the Ultra copy.
+
+  - id: waiting_for_grading
+    title: Work waiting to be graded
+    source: S7
+    where: {needs_grading__gt: 0}
+    measure: sum(needs_grading)
+    severity: 0
+    known: true
+    examples: column_title
+    says: "{value} submission(s) are waiting for a grader: {examples}. They carry over and can be graded in Ultra."
+    action: Agree who grades them, and whether before the freeze or in Ultra.
+    decision: true
+
   - id: timed_open_attempts
     title: Timed tests with attempts open now
     source: S12

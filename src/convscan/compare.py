@@ -157,6 +157,28 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
         ov, nv = len(_rows(base, "S12b", o)), len(_rows(post, "S12b", n))
         add("Tests", "Test exceptions", ov, nv, SAME if ov == nv else DIFFERENT)
 
+    # Work in progress: open attempts and submissions waiting for grading, by type
+    if both("S7"):
+        kinds = (("resource/x-bb-assessment", "tests"), ("resource/x-bb-assignment", "assignments"),
+                 ("resource/x-plugin-scormengine", "SCORM"))
+
+        def wip(rows, field):
+            total = sum(r.get(field) or 0 for r in rows)
+            parts = []
+            for handle, label in kinds:
+                k = sum(r.get(field) or 0 for r in rows if r.get("score_provider_handle") == handle)
+                if k:
+                    parts.append(f"{k} {label}")
+            return total, ", ".join(parts)
+
+        for field, label in (("open", "Attempts in progress"), ("needs_grading", "Submissions waiting for grading")):
+            ov, od = wip(_rows(base, "S7", o), field)
+            nv, nd = wip(_rows(post, "S7", n), field)
+            note = f"Original: {od}. Ultra: {nd}." if (ov or nv) else ""
+            if ov == nv and od != nd:
+                note += " (Assignments convert to Ultra assessments, so the split by type changes.)"
+            add("Learner records", label, ov, nv, SAME if ov == nv else DIFFERENT, note.strip())
+
     # Per-learner grades and attempts, columns matched through M2
     cmap = column_map(post, o)
     if both("S7") and "M2" in ran_post:
@@ -224,7 +246,8 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
         else:
             status = SAME
         add("SCORM", "SCORM records with the same resume state", compared, same, status,
-            (f"{unsaved} have no resume state in the reporting tables yet (the player still holds it), "
+            ("No SCORM records in this course." if not compared else "")
+            + (f"{unsaved} have no resume state in the reporting tables yet (the player still holds it), "
              "so they were not compared: check those in the learner view. " if unsaved else "")
             + (f"{bad} differ or are missing." if bad else ""))
     else:

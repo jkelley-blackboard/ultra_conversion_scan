@@ -430,7 +430,7 @@ att as (
   join attempt a          on a.gradebook_grade_pk1 = gg.pk1
   group by a.gradebook_grade_pk1)
 select s.course_id, cu.users_pk1, cu.pk1 as cu_pk, cu.available_ind as learner_available,
-  gm.pk1 as col_pk, gm.course_contents_pk1 as content_pk, gm.score_provider_handle,
+  gm.pk1 as col_pk, gm.title as column_title, gm.course_contents_pk1 as content_pk, gm.score_provider_handle,
   gg.status as grade_status, gg.manual_score, gg.exempt_ind,
   la.score as last_attempt_score, ha.score as highest_attempt_score,
   coalesce(att.attempts, 0) as attempts, coalesce(att.submitted, 0) as submitted,
