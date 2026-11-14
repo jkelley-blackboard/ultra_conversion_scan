@@ -1,5 +1,11 @@
-# Copy to config.yaml (ignored by Git) and pass with --config. Every key is optional.
-# The database connection is never configured here: it comes from the DDA_* environment variables.
+# Copy to config.yaml (ignored by Git) and pass with --config. One file per site works well
+# (config_<site>.yaml). Every key is optional.
+
+db:                                     # the site's DDA connection. Never put the password here:
+  host: TODO.example.com                #   convscan asks for it, or reads DDA_PASSWORD if set.
+  port: 5432                            #   A DDA_HOST, DDA_PORT, DDA_DBNAME or DDA_USER
+  dbname: TODO                          #   environment variable overrides the value here.
+  user: TODO
 
 prepared_for: TODO institution name     # shown at the top of each report
 new_id_suffix: "-7777"                  # copy course_id = Original course_id + suffix. Bulk copy and

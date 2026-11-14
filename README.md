@@ -1,11 +1,15 @@
 # ultra_conversion_scan (`convscan`)
 
-`convscan` checks Blackboard LMS courses before and after they're converted from the Original course
-view to the Ultra course view, and writes plain-language reports about what it finds.
+`convscan` is a Python command-line tool for checking Blackboard LMS courses before and after they're
+converted from the Original course view to the Ultra course view. It's designed to read the Blackboard
+LMS database through the Direct Data Access (DDA) service, and it writes plain-language reports about
+what it finds.
 
-It reads the LMS reporting database (read-only), saves what it reads, applies a table of rules, and
-writes the reports. There's no AI and no analyst in the loop: the same data always gives the same
-report.
+It connects to the site's DDA database (a read-only PostgreSQL replica of production) with a read-only
+session, runs a fixed set of `SELECT` queries, saves the results, applies a table of rules, and writes
+Markdown reports. There's no AI and no analyst in the loop: the same data always gives the same report.
+
+**You need:** Python 3.10 or later, and DDA credentials for the site (a read-only DDA user).
 
 **Status (2026-11-14):** working, and tested on four real copy-and-convert runs on a demo site (2 to
 10 learners per course). Not yet run on a production site.
@@ -15,105 +19,33 @@ a hand-off report and an ID map for two invented courses, one with typical losse
 
 **Maintainer:** TODO (built by Jeff Kelley, Blackboard, November 2026). Internal to Blackboard.
 
-## A batch, step by step
+## Using it
 
-| Step | Command | What you get |
-|---|---|---|
-| 1. Once per site, check the database has everything the queries need | `convscan check` | "every table and column is present", or a list of what's missing, plus the replica lag (or why it can't be read) |
-| 2. Before the batch, scan the Original courses | `convscan pre --manifest batch01.csv --out runs\batch01_pre` | A **pre-conversion report** per course and a batch summary. The saved data becomes the **baseline** |
-| 3. At the freeze, make the Originals unavailable and run the bulk copy and convert. Watch it finish | `convscan tasks --manifest batch01.csv --wait` | Each course's copy task, polled every minute until all are done, then the replica lag until the reporting database has caught up |
-| 4. Scan the copies. The reporting database is a read replica, and a large batch of copies can make it trail production, so `post` checks the lag first and won't run while it's over `max_replica_lag_s` (300 s by default) | `convscan post --manifest batch01.csv --baseline runs\batch01_pre --out runs\batch01_post` | A **hand-off report** per course, a batch summary and the **ID map** |
-| 5. Run the repairs (groups, partial credit), then scan the copies again | `convscan post ... --out runs\batch01_post2` | The repaired items should now read "Same" |
+**[USER_GUIDE.md](USER_GUIDE.md)** is for the people who run batches and read the reports: install
+and connect, choosing courses, the five steps of a batch, reading each report, looking after the data,
+and what to do when something goes wrong. This README is for maintaining the tool.
 
-Two more commands help along the way:
+The five steps, in short: `convscan check` once per site; `convscan pre` before the batch (its data is
+the baseline); `convscan tasks --wait` during the copy; `convscan post` against the baseline after it;
+`convscan post` again after repairs.
 
-- `convscan render <run folder>` rebuilds a run's reports from its saved data, with no database. Use it
-  after changing the rules or the report templates.
-- `convscan sql --manifest batch01.csv --scope original` prints the queries for one set of courses, for
-  running through another tool (for example the Reporting Framework).
-
-## Install and connect
+## Development setup
 
 Python 3.10 or later. From the repo folder:
 
-```powershell
-pip install -e ".[dev]"
-python -m pytest
+```
+pip install -e ".[dev]"      # pip3 on macOS and Linux
+python -m pytest             # python3 on macOS and Linux
 ```
 
-This installs `psycopg2-binary`, `PyYAML`, `Jinja2` and pytest. Run the tool as `convscan ...`, or as
-`python -m convscan ...` if the Python Scripts folder isn't on `PATH`.
+This installs `psycopg2-binary`, `PyYAML`, `Jinja2` and pytest. None of the tests need a database. The
+connection comes from the config's `db:` block, overridden by any `DDA_HOST`, `DDA_PORT`, `DDA_DBNAME`
+or `DDA_USER` variable; the password from `DDA_PASSWORD` or a hidden prompt, never from a file
+(`config.load` rejects one). See USER_GUIDE.md, "Connect".
 
-The connection comes from environment variables, the same ones the DDA tool uses
-(`github/DDA/tools/dda_query.ps1`):
-
-| Variable | What it is |
-|---|---|
-| `DDA_HOST` | Reporting database host |
-| `DDA_PORT` | Port (default 5432) |
-| `DDA_DBNAME` | The site's database name |
-| `DDA_USER` | A read-only DDA user |
-| `DDA_PASSWORD` | Its password. Never written to a config file or a run |
-
-The session is opened read-only, and every query is a `SELECT`.
-
-## Choosing the courses
-
-Every command except `check` and `render` needs one of these:
-
-- **`--manifest file.csv`**, with columns `orig_course_id,new_course_id`. Leave `new_course_id` blank
-  to use the Original ID plus the configured suffix. Example: [examples/manifest.csv](examples/manifest.csv).
-- **`--node <batch_uid>`**: every Original course associated with that institutional hierarchy node,
-  with copies found by the suffix. Tagging each batch's courses to a node that learners never see
-  means nobody keeps course lists by hand, and a course that moves batch is picked up automatically.
-
-**The new course ID.** By default a copy's ID is the Original's plus `-7777`. Blackboard's bulk copy and
-convert always puts a hyphen before its suffix (`ECON-101` becomes `ECON-101-SANDBOX`). If copies are
-named another way, set `new_id_suffix` in the config or give each `new_course_id` in the manifest.
-
-**Options:**
-
-| Option | Effect |
-|---|---|
-| `--config file.yaml` | Settings: who the reports are for, the ID suffix, the ID length limit, query timeout. See [config.example.yaml](config.example.yaml) |
-| `--no-learner` | Skip the queries that return a row per learner (S7, S8b, S10, S12b). Quicker, but the hand-off can't check learner records |
-| `--ignore-lag` | `post` only: run even while the reporting database trails production. The hand-off report then warns that its losses may not be real yet |
-| `--suffix ""` | Override the suffix. An empty suffix compares each course with itself, which is a quick way to test the tool |
-
-## What the reports say
-
-**Pre-conversion report** (one per course): a short verdict, the course in numbers, a table of risks
-(what the scan found, how serious, whether it's a known conversion behavior, and what to do), the
-decisions the institution needs to make, the site's conversion settings, and what the scan can't
-check.
-
-**Hand-off report** (one per course): the copy task's outcome, then every check comparing the Ultra
-copy with the Original's baseline, each marked:
-
-| Result | Meaning |
-|---|---|
-| Same | Matches the Original |
-| Expected | Changed in a way conversion always changes it (for example, the folders it adds) |
-| Different | Changed in a way that needs a look |
-| Needs action | A known loss to fix before release (for example, groups to restore) |
-| Not checked | The data wasn't there to compare |
-
-It ends with the ID map for the course and the site's conversion settings.
-
-**Batch summary**: one line per course with its counts, linking to each report.
-
-**ID map** (`idmap.csv`, with the hand-off): every Original course and grade column ID with its Ultra
-counterpart and how it was matched. Systems outside the LMS that store these IDs use it.
-
-**Severity**, in the pre-conversion report:
-
-| Tier | Meaning |
-|---|---|
-| 1 | Blocks a learner resuming or finishing |
-| 2 | Must be fixed, but doesn't block learners |
-| 3 | Improves the experience |
-| 4 | Makes the most of Ultra |
-| 0 | Unknown, or can't be tested by the scan: check by hand |
+Severity in the rule table is a number: 1 blocks learners, 2 needs fixing, 3 improves the experience,
+4 makes the most of Ultra, 0 to check by hand. Hand-off results are `same`, `expected`, `different`,
+`action` (shown as "Needs action") and `not checked`.
 
 ## How it works
 
@@ -229,33 +161,27 @@ file; 0 there switches the rule off.
 A rule whose query wasn't run (for example with `--no-learner`) appears under "Not checked" in the
 report instead of passing silently.
 
-## Runs and learner data
+## Data handling
 
-Each run is a folder:
+convscan saves no names, usernames, email addresses or student IDs. Learners appear in the saved
+data only as internal database keys (`users_pk1`, a sequential number), and the reports contain
+counts only.
 
-```
-runs/<name>/
-  run.json         which courses, settings, rows and seconds per query, any errors
-  data/*.csv       one file per query (post-scans add S2_now, S7_now, S10_now: the Originals re-read)
-  reports/         the reports, the batch summary, and idmap.csv (post-scan)
-```
+| What | Saved where | About learners |
+|---|---|---|
+| Reports, batch summary | `reports/` | Counts only. Titles of courses, items, columns and groups appear; group names are whatever the course author typed |
+| `idmap.csv` | `reports/` | Nothing: course and grade column IDs |
+| `run.json` | Run folder | Nothing: courses, settings, row counts, timings, replica lag |
+| S7, S8b, S10, S12b, and S9's named users | `data/*.csv` | One row per learner by internal key: grades, attempts, group, test exceptions, SCORM location |
+| SCORM runtime state | Not saved | Decoded while reading and replaced by a fingerprint |
+| `diff_learner_records.csv` | `data/` | Internal key, column and the two values, for each mismatch |
 
-Learners appear in the data only by internal key (`users_pk1`), never by name, username or email. The
-CSVs are still learner records, though. **Keep runs out of this repo** (Git ignores `runs/`) and out of
-shared or client-visible folders unless the institution has agreed. The reports show counts, not
-learners.
+No query selects a name, username or email (the SQL header says so, and `convscan sql` prints exactly
+what runs). `--no-learner` leaves out the per-learner queries altogether.
 
-## What it can't check
-
-The reports list these under "Not checked":
-
-- **What a learner actually sees.** The scan proves conditions, groups and scores carried over, not that
-  Ultra evaluates them the same way (learning-module sequencing, flattened folders). Pair it with a
-  learner-view check, such as the Playwright scripts, on each gated path.
-- **Links inside files and packages** (SCORM packages or HTML pages that link to the Original course).
-- **Whether linked Content Collection files still exist.**
-- **Calculated column values,** which are worked out when displayed, not stored.
-- **Systems outside the LMS** that store course or column IDs: give them the ID map.
+A run folder holds `run.json`, `data/*.csv` (one per query; post-scans add `S2_now`, `S7_now` and
+`S10_now`, the Originals re-read) and `reports/`. Git ignores `runs/`. What the scan can't check is
+listed in USER_GUIDE.md and in each report's "Not checked" section.
 
 ## Planned work
 
@@ -346,19 +272,9 @@ Run `python -m pytest` after any change. None of the tests need a database.
 **Editing the SQL:** queries are separated by a semicolon at the end of a line, so a comment line must
 never end in one (a test checks this). Never write a placeholder with its braces in a comment.
 
-## Terms
-
-| Term | Meaning |
-|---|---|
-| Original, Ultra | The two course views in Blackboard LMS. Conversion moves a course from Original to Ultra |
-| Bulk copy and convert | Blackboard's admin tool that copies each course and converts the copy, optionally with learner activity |
-| DDA | Direct Data Access: read-only access to the LMS reporting database |
-| Reporting Framework | Blackboard's way to run custom SQL over REST, an alternative to DDA |
-| Baseline | The pre-scan's saved data, which the post-scan compares against |
-| Freeze | The point where an Original course becomes unavailable and is copied |
-| Release condition | A rule that controls when learners see an item (for example, after a score on a test) |
-| Partial credit | Points for an answer that is partly right |
-| SCORM | A standard for packaged e-learning; its player saves each learner's place (the bookmark) |
+Terms (Original, Ultra, DDA, baseline, freeze and the rest) are defined at the end of USER_GUIDE.md.
+The **Reporting Framework** is Blackboard's way to run custom SQL over REST, an alternative runner to
+DDA.
 
 ## Where it came from
 

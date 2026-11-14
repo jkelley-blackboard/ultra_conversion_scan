@@ -20,19 +20,54 @@ class Runner(Protocol):
     def query(self, sql: str) -> tuple[list[str], Sequence[Sequence]]: ...
 
 
-class DdaRunner:
-    """Direct Data Access (PostgreSQL), read-only session. Credentials from DDA_* variables."""
+def connection_settings(db: dict | None = None, env=None) -> dict:
+    """Host, port, database and user: a DDA_* environment variable wins over the config's db block.
 
-    def __init__(self, statement_timeout_s: int = 900):
+    Never includes the password; see password()."""
+    env = os.environ if env is None else env
+    db = db or {}
+    out = {k: env.get(f"DDA_{k.upper()}") or db.get(k) for k in ("host", "port", "dbname", "user")}
+    out["port"] = str(out["port"] or 5432)
+    missing = [k for k in ("host", "dbname", "user") if not out[k]]
+    if missing:
+        raise SystemExit(
+            "No database " + ", ".join(missing) + " given. Put them under db: in your config file "
+            "(see config.example.yaml) and pass it with --config, or set " +
+            ", ".join(f"DDA_{k.upper()}" for k in missing) + ".")
+    return out
+
+
+def password(env=None, prompt=None) -> str:
+    """DDA_PASSWORD if set; otherwise ask, without echoing. Never stored anywhere."""
+    env = os.environ if env is None else env
+    if env.get("DDA_PASSWORD"):
+        return env["DDA_PASSWORD"]
+    import sys
+    if prompt is None:
+        if not sys.stdin.isatty():
+            raise SystemExit("No password: set DDA_PASSWORD, or run convscan in a terminal so it can ask.")
+        import getpass
+        prompt = getpass.getpass
+    return prompt("DDA password: ")
+
+
+class DdaRunner:
+    """Direct Data Access (PostgreSQL), read-only session.
+
+    Connection details come from the config's db block or the DDA_* variables; the password from
+    DDA_PASSWORD or a prompt."""
+
+    def __init__(self, statement_timeout_s: int = 900, db: dict | None = None):
         import psycopg2
 
-        missing = [v for v in ("DDA_HOST", "DDA_DBNAME", "DDA_USER", "DDA_PASSWORD") if not os.environ.get(v)]
-        if missing:
-            raise SystemExit("Missing environment variables: " + ", ".join(missing))
-        self.conn = psycopg2.connect(
-            host=os.environ["DDA_HOST"], port=os.environ.get("DDA_PORT", "5432"),
-            dbname=os.environ["DDA_DBNAME"], user=os.environ["DDA_USER"],
-            password=os.environ["DDA_PASSWORD"], application_name=f"convscan/{__version__}")
+        conn = connection_settings(db)
+        try:
+            self.conn = psycopg2.connect(**conn, password=password(), connect_timeout=30,
+                                         application_name=f"convscan/{__version__}")
+        except psycopg2.OperationalError as e:
+            detail = str(e).strip().splitlines()[0] if str(e).strip() else type(e).__name__
+            raise SystemExit(f"Couldn't connect to {conn['dbname']} on {conn['host']}:{conn['port']} as "
+                             f"{conn['user']}: {detail}")
         self.conn.set_session(readonly=True, autocommit=True)
         with self.conn.cursor() as cur:
             cur.execute(f"set statement_timeout = {int(statement_timeout_s) * 1000}")

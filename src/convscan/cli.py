@@ -34,7 +34,7 @@ def _new_out(path: str) -> pathlib.Path:
 
 def cmd_check(a, cfg):
     stmts = kit.statements(kit.load_template(), "select 1", cfg["new_id_suffix"], only={"S0"})
-    runner = DdaRunner(cfg["statement_timeout_s"])
+    runner = DdaRunner(cfg["statement_timeout_s"], cfg["db"])
     cols, rows = runner.query(stmts[0][1])
     if rows:
         print(f"{len(rows)} table/column(s) MISSING: the kit will not run as written")
@@ -51,7 +51,7 @@ def cmd_pre(a, cfg):
     out = _new_out(a.out)
     stmts = kit.statements(kit.load_template(), scope.originals_sql(), scope.suffix, skip=_skip(a, cfg) | {"S0"})
     print(f"pre-scan, {scope.describe()}, {len(stmts)} queries -> {out}")
-    runner = DdaRunner(cfg["statement_timeout_s"])
+    runner = DdaRunner(cfg["statement_timeout_s"], cfg["db"])
     run = run_kit(runner, stmts, out, {"mode": "pre", "name": out.name, "scope": scope.describe(),
                                        "suffix": scope.suffix, "pairs": scope.pairs})
     runner.close()
@@ -65,7 +65,7 @@ def cmd_post(a, cfg):
     if base_run.get("mode") != "pre":
         raise SystemExit(f"{base_dir} is not a pre-scan run")
     pairs = scope.pairs or [(c, c + scope.suffix) for c in sorted({r["course_id"] for r in base.get("S1", [])})]
-    runner = DdaRunner(cfg["statement_timeout_s"])
+    runner = DdaRunner(cfg["statement_timeout_s"], cfg["db"])
     # The reporting database is a read replica. After a large batch of copies it can trail production,
     # and a scan of half-replicated copies reports losses that aren't real.
     lag = replica_lag(runner)
@@ -112,7 +112,7 @@ def cmd_tasks(a, cfg):
     if not scope.pairs:
         raise SystemExit("tasks needs --manifest (a node scope has no copy list until the copies exist)")
     sql = dict(kit.statements(kit.load_template(), scope.copies_sql(), scope.suffix, only={"S13"}))["S13"]
-    runner = DdaRunner(cfg["statement_timeout_s"])
+    runner = DdaRunner(cfg["statement_timeout_s"], cfg["db"])
     deadline = time.time() + a.timeout * 60
     while True:
         cols, rows = runner.query(sql)

@@ -97,7 +97,8 @@ order by s.course_id;
 -- S2. Members: every role, and students in progress, completed and disabled, with last
 --     access. Disabled enrollments (row_status 2) are counted separately. Copy and convert
 --     KEEPS disabled members (observed 2026-11-13), so the copy load is members plus
---     students_disabled (plus any disabled staff).
+--     students_disabled (plus any disabled staff). Left join, so a course with no members
+--     still returns a row of zeros.
 -- ===========================================================================
 with scope as ({SCOPE})
 select s.course_id,
@@ -114,7 +115,7 @@ select s.course_id,
   count(*) filter (where cu.row_status = 0 and cu.role = 'S' and cu.available_ind = 'Y'
                      and cu.last_access_date is null)                               as ip_never
 from scope s
-join course_users cu on cu.crsmain_pk1 = s.crs_pk
+left join course_users cu on cu.crsmain_pk1 = s.crs_pk
 group by s.course_id
 order by members desc;
 
