@@ -20,8 +20,10 @@ from convscan.runner import load_run  # noqa: E402
 
 def main():
     out = HERE / "sample_reports"
-    if out.exists():
-        shutil.rmtree(out)
+    # Clear old files but keep the folders: synced folders (OneDrive) can refuse to delete a directory.
+    for f in out.rglob("*"):
+        if f.is_file():
+            f.unlink()
     with tempfile.TemporaryDirectory() as tmp:
         pre_dir, post_dir = sample_data.write_runs(tmp)
         cfg = config.load(None)
@@ -30,8 +32,8 @@ def main():
         report.render_pre(pre_dir, pre_run, pre, cfg)
         post_run, post = load_run(post_dir)
         report.render_post(post_dir, post_run, post, pre_run, pre, cfg)
-        shutil.copytree(pre_dir / "reports", out / "pre")
-        shutil.copytree(post_dir / "reports", out / "post")
+        shutil.copytree(pre_dir / "reports", out / "pre", dirs_exist_ok=True)
+        shutil.copytree(post_dir / "reports", out / "post", dirs_exist_ok=True)
     print(f"wrote {sum(1 for _ in out.rglob('*.*'))} files in {out}")
 
 
