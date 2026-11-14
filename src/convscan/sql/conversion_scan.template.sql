@@ -685,7 +685,7 @@ order by s.course_id, t.dtcreated;
 with pairs as ({PAIRS}),                                -- orig_course_id, new_course_id
 o as (
   select p.orig_course_id, p.new_course_id, gm.pk1 as col_pk, gm.title, gm.score_provider_handle,
-         gm.calculated_ind, gm.visible_ind, cc.title as content_title, cc.cnthndlr_handle,
+         gm.calculated_ind, gm.visible_ind, gm.visible_in_book_ind, cc.title as content_title, cc.cnthndlr_handle,
          par.title as parent_title,
          lower(trim(regexp_replace(regexp_replace(cc.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as c_norm,
          lower(trim(regexp_replace(regexp_replace(par.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g'))) as p_norm,
@@ -699,7 +699,7 @@ o as (
   left join course_contents par on par.pk1 = cc.parent_pk1),
 n as (
   select p.new_course_id, gm.pk1 as col_pk, gm.title, gm.score_provider_handle, gm.calculated_ind,
-         gm.visible_ind, cc.title as content_title, cc.cnthndlr_handle, par.title as parent_title,
+         gm.visible_ind, gm.visible_in_book_ind, cc.title as content_title, cc.cnthndlr_handle, par.title as parent_title,
          lower(trim(regexp_replace(regexp_replace(cc.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as c_norm,
          lower(trim(regexp_replace(regexp_replace(par.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g'))) as p_norm,
          lower(trim(regexp_replace(regexp_replace(gm.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as t_norm,
@@ -711,31 +711,50 @@ n as (
   left join course_contents cc  on cc.pk1 = gm.course_contents_pk1
   left join course_contents par on par.pk1 = cc.parent_pk1),
 cand as (
-  select o.*, n.col_pk as new_col_pk, n.visible_ind as new_visible_ind,
+  select o.*, n.col_pk as new_col_pk, n.visible_ind as new_visible_ind, n.visible_in_book_ind as new_in_book_ind,
     case
       when o.c_norm is not null and n.c_norm = o.c_norm and n.h_norm = o.h_norm
            and n.p_norm is not distinct from o.p_norm                 then 1  -- item, type, parent
       when o.c_norm is not null and n.c_norm = o.c_norm and n.h_norm = o.h_norm then 2  -- item and type
-      when o.c_norm is null and n.t_norm = o.t_norm and n.is_calc = o.is_calc then 3  -- unattached: title
+      when o.c_norm is null and n.c_norm is null                              -- unattached to unattached:
+           and n.t_norm = o.t_norm and n.is_calc = o.is_calc then 3              -- title
     end as match_level
   from o join n on n.new_course_id = o.new_course_id),
-best as (
-  select c.*, min(match_level) over (partition by c.col_pk) as best_level
-  from cand c where match_level is not null)
+best as (                                  -- each Original column's candidates at its best level
+  select c.*,
+         (c.new_visible_ind is not distinct from c.visible_ind
+          and c.new_in_book_ind is not distinct from c.visible_in_book_ind) as same_vis
+  from (select c.*, min(match_level) over (partition by c.col_pk) as best_level
+        from cand c where match_level is not null) c
+  where c.match_level = c.best_level),
+vis as (                                   -- tie-break 1: keep candidates with the same visibility
+  select b.*, bool_or(b.same_vis) over (partition by b.col_pk) as any_same_vis  -- (to learners and
+  from best b),                                                                 --  in the Grade Center)
+grp as (
+  select v.col_pk, v.new_course_id, v.best_level,
+         count(*)                                                        as n_all,
+         count(*) filter (where v.same_vis or not v.any_same_vis)        as n_cand,
+         string_agg(v.new_col_pk::text, ',' order by v.new_col_pk)
+           filter (where v.same_vis or not v.any_same_vis)               as cand_set,
+         string_agg(v.new_col_pk::text, ', ' order by v.new_col_pk)      as candidates
+  from vis v group by v.col_pk, v.new_course_id, v.best_level),
+ranked as (                                -- tie-break 2: Original columns that share the same
+  select g.*,                              -- candidate set pair off in creation order (pk), since
+         row_number() over (partition by g.new_course_id, g.cand_set order by g.col_pk) as o_rank,
+         count(*) over (partition by g.new_course_id, g.cand_set)                     as n_orig
+  from grp g)                              -- the copy keeps the columns in the same order
 select o.orig_course_id, o.new_course_id, o.col_pk as orig_col_pk, o.title, o.content_title,
   o.score_provider_handle, o.calculated_ind, o.visible_ind,
-  case when count(b.new_col_pk) = 0 then 'not found'
-       when count(b.new_col_pk) = 1 then 'matched'
-       when count(b.new_col_pk) filter (where b.new_visible_ind = o.visible_ind) = 1 then 'matched (visibility tie-break)'
+  case when r.col_pk is null              then 'not found'
+       when r.n_all = 1                   then 'matched'
+       when r.n_cand = 1                  then 'matched (visibility tie-break)'
+       when r.n_cand = r.n_orig           then 'matched (order tie-break)'
        else 'ambiguous' end                                                   as match_status,
-  case when count(b.new_col_pk) = 1 then min(b.new_col_pk)
-       when count(b.new_col_pk) filter (where b.new_visible_ind = o.visible_ind) = 1
-         then min(b.new_col_pk) filter (where b.new_visible_ind = o.visible_ind)
+  case when r.n_cand = 1                  then split_part(r.cand_set, ',', 1)::bigint
+       when r.n_cand = r.n_orig           then split_part(r.cand_set, ',', r.o_rank::int)::bigint
   end                                                                         as new_col_pk,  -- blank when ambiguous
-  min(b.best_level)                                                           as match_level,
-  string_agg(b.new_col_pk::text, ', ')                                         as candidates
+  r.best_level                                                                as match_level,
+  r.candidates
 from o
-left join best b on b.col_pk = o.col_pk and b.match_level = b.best_level
-group by o.orig_course_id, o.new_course_id, o.col_pk, o.title, o.content_title,
-         o.score_provider_handle, o.calculated_ind, o.visible_ind
+left join ranked r on r.col_pk = o.col_pk
 order by o.orig_course_id, o.col_pk;

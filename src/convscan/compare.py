@@ -217,8 +217,15 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
                               "field": f"SCORM {r['scorm_title']} attempt {r['attempt_no']}",
                               "original": r["runtime_md5"], "copy": other["runtime_md5"]})
         bad = compared - same - unsaved
-        add("SCORM", "SCORM records with the same resume state", compared, same, SAME if bad == 0 else DIFFERENT,
-            (f"{unsaved} not yet saved by the player (not a difference). " if unsaved else "")
+        if bad:
+            status = DIFFERENT
+        elif compared and same == 0:   # nothing could be compared: don't call that "same"
+            status = NOT_CHECKED
+        else:
+            status = SAME
+        add("SCORM", "SCORM records with the same resume state", compared, same, status,
+            (f"{unsaved} have no resume state in the reporting tables yet (the player still holds it), "
+             "so they were not compared: check those in the learner view. " if unsaved else "")
             + (f"{bad} differ or are missing." if bad else ""))
     else:
         add("SCORM", "SCORM resume state", "", "", NOT_CHECKED, "Needs S10 on both runs.")
