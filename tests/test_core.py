@@ -3,12 +3,19 @@ from convscan import config, kit, rules
 from convscan.scope import Scope
 
 EXPECTED = ["S0", "S1", "S2", "S3", "S3b", "S4", "S5", "S5b", "S5c", "S6", "S7", "S7b", "S8", "S8b",
-            "S9", "S10", "S11", "S12", "S12b", "M2"]
+            "S9", "S10", "S11", "S12", "S12b", "S13", "M2"]
 
 
 def test_kit_splits_into_every_labeled_statement():
     stmts = kit.statements(kit.load_template(), "select 1", "7777", pairs_sql="select 1")
     assert [label for label, _ in stmts] == EXPECTED
+
+
+def test_no_comment_line_ends_in_semicolon():
+    """The splitter cuts on a semicolon at the end of a line, so a comment ending in one breaks the kit."""
+    bad = [n for n, line in enumerate(kit.load_template().splitlines(), 1)
+           if line.lstrip().startswith("--") and line.rstrip().endswith(";")]
+    assert not bad, f"comment lines ending in ';': {bad}"
 
 
 def test_placeholders_all_replaced():

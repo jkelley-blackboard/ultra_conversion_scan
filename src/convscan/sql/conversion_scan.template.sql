@@ -67,7 +67,8 @@ with need(t, c) as (values
  ('scormpackage','api_course_id'),('scormregistration','api_registration_id'),('scormregistration','suspended_activity_id'),
  ('scormactivity','scorm_registration_id'),('scormactivityrt','location'),('scormactivityrt','suspend_data'),
  ('scormbbpackageinfo','max_attempts'),('scormpackageproperties','time_limit'),
- ('forum_main','confmain_pk1'),('msg_main','forummain_pk1'))
+ ('forum_main','confmain_pk1'),('msg_main','forummain_pk1'),
+ ('queued_tasks','task_type'),('queued_tasks','status'),('queued_tasks','course_main_pk1'),('queued_tasks','results'))
 select n.t as table_name, n.c as column_name, 'MISSING' as status
 from need n
 left join information_schema.columns ic
@@ -636,6 +637,32 @@ order by s.course_id, gm.title, applies_to, g.group_name, cu.users_pk1;
 
 
 -- ===========================================================================
+-- S13. System tasks for each course (queued_tasks): restore, copy and convert, and the
+--      follow-on tasks a copy triggers (for example assessment file migration).
+--      Matched by the task's course, or by the course IDs in a copy task's title
+--      ('copy|course.copy.queue.task.label|<new course_id>,<source course_id>').
+--      status (seen on demo 2026-11-14): C complete, E error, I in progress. task_type for
+--      the bulk copy and convert is BulkCopyAndConvertOperation, and results holds the
+--      outcome message, including warnings (for example a missing LTI placement on restore).
+-- ===========================================================================
+with scope as ({SCOPE}),
+t as (
+  select qt.*, regexp_replace(qt.title, '^[^|]*\|[^|]*\|', '') as subject
+  from queued_tasks qt
+  where qt.course_main_pk1 in (select crs_pk from scope)
+     or qt.title like 'copy|%')
+select s.course_id, t.pk1 as task_pk, t.task_type, t.status,
+  case t.status when 'C' then 'complete' when 'E' then 'error' when 'I' then 'in progress' else t.status end as status_label,
+  t.dtcreated, t.start_date, t.end_date,
+  extract(epoch from (t.end_date - t.start_date))::int as seconds,
+  t.progress, t.subject as task_subject, left(t.results, 400) as results_text
+from scope s
+join t on t.course_main_pk1 = s.crs_pk
+       or (t.title like 'copy|%' and s.course_id in (split_part(t.subject, ',', 1), split_part(t.subject, ',', 2)))
+order by s.course_id, t.dtcreated;
+
+
+-- ===========================================================================
 -- M1. (No SQL.) Item match, Original to copy: from S3b on both scopes, match on
 --     (handler, title, parent title), then (handler, title). Conversion adds wrapper
 --     folders and can duplicate a folder's rules, so one Original item may match two
@@ -647,12 +674,24 @@ order by s.course_id, gm.title, applies_to, g.group_name, cu.users_pk1;
 -- M2. Column map, Original to copy, matched by attached item, not by name
 --     (replaces Stage 1 Q9, which matched on title). One row per Original column.
 --     Feeds the ID map in the hand-off report.
+--     Normalized before matching (all seen on demo 2026-11-14, comparing real conversions):
+--       * titles: conversion strips HTML from item titles ('<u>Chapter 1</u>' becomes
+--         'Chapter 1'), so tags, case and repeated spaces are ignored,
+--       * type: an Original assignment (resource/x-bb-assignment) becomes an Ultra
+--         assessment (resource/x-bb-assessment), so the two count as the same type,
+--       * calculated: Original's T, W, M and so on all become C in Ultra, so only
+--         calculated or not is compared. Ultra drops the Weighted Total column.
 -- ===========================================================================
 with pairs as ({PAIRS}),                                -- orig_course_id, new_course_id
 o as (
   select p.orig_course_id, p.new_course_id, gm.pk1 as col_pk, gm.title, gm.score_provider_handle,
          gm.calculated_ind, gm.visible_ind, cc.title as content_title, cc.cnthndlr_handle,
-         par.title as parent_title
+         par.title as parent_title,
+         lower(trim(regexp_replace(regexp_replace(cc.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as c_norm,
+         lower(trim(regexp_replace(regexp_replace(par.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g'))) as p_norm,
+         lower(trim(regexp_replace(regexp_replace(gm.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as t_norm,
+         replace(coalesce(gm.score_provider_handle, ''), 'resource/x-bb-assignment', 'resource/x-bb-assessment') as h_norm,
+         coalesce(gm.calculated_ind, 'N') <> 'N' as is_calc
   from pairs p
   join course_main cm on cm.course_id = p.orig_course_id
   join gradebook_main gm on gm.crsmain_pk1 = cm.pk1 and coalesce(gm.deleted_ind, 'N') = 'N'
@@ -660,7 +699,12 @@ o as (
   left join course_contents par on par.pk1 = cc.parent_pk1),
 n as (
   select p.new_course_id, gm.pk1 as col_pk, gm.title, gm.score_provider_handle, gm.calculated_ind,
-         gm.visible_ind, cc.title as content_title, cc.cnthndlr_handle, par.title as parent_title
+         gm.visible_ind, cc.title as content_title, cc.cnthndlr_handle, par.title as parent_title,
+         lower(trim(regexp_replace(regexp_replace(cc.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as c_norm,
+         lower(trim(regexp_replace(regexp_replace(par.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g'))) as p_norm,
+         lower(trim(regexp_replace(regexp_replace(gm.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as t_norm,
+         replace(coalesce(gm.score_provider_handle, ''), 'resource/x-bb-assignment', 'resource/x-bb-assessment') as h_norm,
+         coalesce(gm.calculated_ind, 'N') <> 'N' as is_calc
   from pairs p
   join course_main cm on cm.course_id = p.new_course_id
   join gradebook_main gm on gm.crsmain_pk1 = cm.pk1 and coalesce(gm.deleted_ind, 'N') = 'N'
@@ -669,13 +713,10 @@ n as (
 cand as (
   select o.*, n.col_pk as new_col_pk, n.visible_ind as new_visible_ind,
     case
-      when o.content_title is not null and n.content_title = o.content_title
-           and n.score_provider_handle = o.score_provider_handle
-           and n.parent_title is not distinct from o.parent_title                then 1  -- item, type, parent
-      when o.content_title is not null and n.content_title = o.content_title
-           and n.score_provider_handle = o.score_provider_handle                 then 2  -- item and type
-      when o.content_title is null and lower(trim(n.title)) = lower(trim(o.title))
-           and coalesce(n.calculated_ind, 'N') = coalesce(o.calculated_ind, 'N') then 3  -- unattached: title
+      when o.c_norm is not null and n.c_norm = o.c_norm and n.h_norm = o.h_norm
+           and n.p_norm is not distinct from o.p_norm                 then 1  -- item, type, parent
+      when o.c_norm is not null and n.c_norm = o.c_norm and n.h_norm = o.h_norm then 2  -- item and type
+      when o.c_norm is null and n.t_norm = o.t_norm and n.is_calc = o.is_calc then 3  -- unattached: title
     end as match_level
   from o join n on n.new_course_id = o.new_course_id),
 best as (

@@ -1,6 +1,8 @@
 """Post-scan compare: the baseline run (Originals) against the post run (copies), and the ID map."""
 from __future__ import annotations
 
+import re
+
 SAME, DIFFERENT, EXPECTED, ACTION, NOT_CHECKED = "same", "different", "expected", "action", "not checked"
 
 # Per-learner fields compared in S7. Scores compare within a small tolerance.
@@ -20,6 +22,15 @@ def _eq(a, b):
     if isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool):
         return abs(a - b) < 0.001
     return a == b
+
+
+def norm(title) -> str:
+    """Conversion strips HTML from titles ('<u>Chapter 1</u>' -> 'Chapter 1'): compare without it."""
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]*>", "", str(title or ""))).strip().lower()
+
+
+# Ultra keeps one overall grade, so the Original's weighted total has no counterpart.
+_WEIGHTED = re.compile(r"weighted ?total|OutcomeDefinition\.WeightedTotal", re.I)
 
 
 def _ext(pk):
@@ -45,6 +56,23 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
     def both(label):
         return label in ran_base and label in ran_post
 
+    # The copy and convert task itself
+    if "S13" in ran_post:
+        tasks = [t for t in _rows(post, "S13", n) if t.get("task_type") == "BulkCopyAndConvertOperation"]
+        if not tasks:
+            add("Course", "Copy and convert task", "", "not found", NOT_CHECKED,
+                "No bulk copy and convert task names this course (copied another way?).")
+        else:
+            t = tasks[-1]
+            msg = (t.get("results_text") or "").replace("copy|copy.msg.clone.operation.success", "succeeded")
+            add("Course", "Copy and convert task", "", t.get("status_label"),
+                SAME if t.get("status") == "C" else ACTION,
+                f"{str(t.get('end_date') or '')[:16]}, {t.get('seconds')} s. {msg}".strip())
+        failed = [t for t in _rows(post, "S13", n) if t.get("status") == "E"]
+        if failed:
+            add("Course", "Failed system tasks", "", len(failed), ACTION,
+                "; ".join(f"{t.get('task_type')}: {(t.get('results_text') or '')[:120]}" for t in failed))
+
     # Members
     if both("S2"):
         a, b = _one(base, "S2", o), _one(post, "S2", n)
@@ -56,8 +84,10 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
 
     # Content
     if both("S3"):
-        a, b = _one(base, "S3", o), _one(post, "S3", n)
-        for col, label, exact in (("tests", "Tests", True), ("assignments", "Assignments", True),
+        a, b = dict(_one(base, "S3", o)), dict(_one(post, "S3", n))
+        for x in (a, b):  # conversion turns assignments into Ultra assessments: count them together
+            x["tests_assignments"] = (x.get("tests") or 0) + (x.get("assignments") or 0)
+        for col, label, exact in (("tests_assignments", "Tests and assignments", True),
                                   ("scorm", "SCORM items", True), ("forum_links", "Discussion links", True),
                                   ("lti_items", "LTI tool links", True), ("items", "All items", False)):
             ov, nv = a.get(col) or 0, b.get(col) or 0
@@ -71,24 +101,46 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
     # Grade columns
     if both("S4"):
         ov, nv = len(_rows(base, "S4", o)), len(_rows(post, "S4", n))
-        add("Grades", "Grade columns", ov, nv, SAME if ov == nv else (EXPECTED if nv > ov else DIFFERENT),
-            "" if ov == nv else ("Extra columns in Ultra are listed in the ID map." if nv > ov else ""))
-
-    # Groups
-    if both("S8"):
-        ov, nv = len(_rows(base, "S8", o)), len(_rows(post, "S8", n))
+        weighted = sum(1 for r in _rows(base, "S4", o) if _WEIGHTED.search(r.get("title") or ""))
         if ov == nv:
-            add("Groups", "Groups", ov, nv, SAME)
-        elif nv == 0:
-            add("Groups", "Groups", ov, nv, ACTION, "Groups were not carried over: run the group repair, then re-scan.")
+            add("Grades", "Grade columns", ov, nv, SAME)
+        elif nv == ov - weighted:
+            add("Grades", "Grade columns", ov, nv, EXPECTED, "Ultra drops the weighted total column.")
+        elif nv > ov:
+            add("Grades", "Grade columns", ov, nv, EXPECTED, "Extra columns in Ultra are listed in the ID map.")
         else:
-            add("Groups", "Groups", ov, nv, DIFFERENT)
+            add("Grades", "Grade columns", ov, nv, DIFFERENT, "Missing columns are listed in the ID map as not found.")
 
-    # Release rules
+    # Groups: only groups with members or a job to do need restoring
+    if both("S8"):
+        og, ng = _rows(base, "S8", o), _rows(post, "S8", n)
+        used = [g for g in og if (g.get("members") or 0) > 0 or (g.get("criteria_using_group") or 0) > 0
+                or (g.get("test_exceptions_using_group") or 0) > 0]
+        have = {norm(g.get("group_name")) for g in ng}
+        missing = [g["group_name"] for g in used if norm(g.get("group_name")) not in have]
+        if missing:
+            add("Groups", "Groups in use", len(used), len(used) - len(missing), ACTION,
+                f"Not carried over: {'; '.join(missing[:8])}. Run the group repair, then re-scan.")
+        elif len(og) == len(ng):
+            add("Groups", "Groups", len(og), len(ng), SAME)
+        else:
+            add("Groups", "Groups", len(og), len(ng), EXPECTED,
+                "Only empty, unused groups are missing (conversion drops groups).")
+
+    # Release rules: is every gated item still gated?
     if both("S9"):
-        ov, nv = len(_rows(base, "S9", o)), len(_rows(post, "S9", n))
-        add("Release rules", "Release conditions", ov, nv, SAME if ov == nv else DIFFERENT,
-            "" if ov == nv else "Compare item by item (S9 on both runs).")
+        orows, nrows = _rows(base, "S9", o), _rows(post, "S9", n)
+        o_items = {norm(r.get("item_title")): r.get("item_title") for r in orows}
+        n_items = {norm(r.get("item_title")) for r in nrows}
+        lost = [title for key, title in o_items.items() if key not in n_items]
+        if lost:
+            add("Release rules", "Gated items still gated", len(o_items), len(o_items) - len(lost), DIFFERENT,
+                f"No condition in Ultra on: {'; '.join(lost[:8])}{' ...' if len(lost) > 8 else ''}.")
+        else:
+            add("Release rules", "Gated items still gated", len(o_items), len(o_items), SAME,
+                "" if len(orows) == len(nrows) else
+                f"Conditions {len(orows)} in the Original, {len(nrows)} in Ultra: conversion repeats some on the "
+                "folders it adds. Compare item by item before release.")
 
     # Partial credit
     if both("S5c"):
@@ -147,11 +199,11 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
 
     # SCORM runtime state
     if both("S10"):
-        new_rows = {(r["users_pk1"], r["scorm_title"], r["attempt_no"]): r for r in _rows(post, "S10", n)}
+        new_rows = {(r["users_pk1"], norm(r["scorm_title"]), r["attempt_no"]): r for r in _rows(post, "S10", n)}
         compared = same = unsaved = 0
         for r in _rows(base, "S10", o):
             compared += 1
-            other = new_rows.get((r["users_pk1"], r["scorm_title"], r["attempt_no"]))
+            other = new_rows.get((r["users_pk1"], norm(r["scorm_title"]), r["attempt_no"]))
             if other is None:
                 diffs.append({"course_id": o, "users_pk1": r["users_pk1"], "orig_col_pk": "", "new_col_pk": "",
                               "field": f"SCORM {r['scorm_title']} attempt {r['attempt_no']}",
@@ -192,9 +244,12 @@ def id_map(o: str, n: str, base: dict, post: dict) -> list[dict]:
     mapped = set()
     for m in sorted(column_map(post, o).values(), key=lambda r: r["orig_col_pk"]):
         mapped.add(m.get("new_col_pk"))
+        status = m.get("match_status", "")
+        if status == "not found" and _WEIGHTED.search(m.get("title") or ""):
+            status = "removed in Ultra (weighted total)"
         rows.append({"orig_course_id": o, "new_course_id": n, "orig_id": _ext(m["orig_col_pk"]),
                      "new_id": _ext(m.get("new_col_pk")), "kind": "grade column", "title": m.get("title", ""),
-                     "attached_item": m.get("content_title") or "", "match_status": m.get("match_status", "")})
+                     "attached_item": m.get("content_title") or "", "match_status": status})
     for r in _rows(post, "S4", n):
         if r["col_pk"] not in mapped:
             rows.append({"orig_course_id": o, "new_course_id": n, "orig_id": "", "new_id": _ext(r["col_pk"]),

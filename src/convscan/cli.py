@@ -86,6 +86,43 @@ def cmd_render(a, cfg):
     _render(pathlib.Path(a.run), cfg)
 
 
+def cmd_tasks(a, cfg):
+    """Show the copy and convert task for each pair (S13 on the copies); --wait polls until all finish."""
+    import time
+
+    scope = _scope(a, cfg)
+    if not scope.pairs:
+        raise SystemExit("tasks needs --manifest (a node scope has no copy list until the copies exist)")
+    sql = dict(kit.statements(kit.load_template(), scope.copies_sql(), scope.suffix, only={"S13"}))["S13"]
+    runner = DdaRunner(cfg["statement_timeout_s"])
+    deadline = time.time() + a.timeout * 60
+    while True:
+        cols, rows = runner.query(sql)
+        recs = [dict(zip(cols, r)) for r in rows]
+        done = 0
+        print(time.strftime("%H:%M:%S"))
+        for orig, new in scope.pairs:
+            t = [x for x in recs if x["course_id"] == new and x["task_type"] == "BulkCopyAndConvertOperation"]
+            other = [x for x in recs if x["course_id"] == new and x["task_type"] != "BulkCopyAndConvertOperation"
+                     and x["status"] not in ("C",)]
+            if not t:
+                print(f"  {orig:<20} -> {new:<20} no copy task yet")
+                continue
+            t = t[-1]
+            done += t["status"] in ("C", "E") and not other
+            pending = f", {len(other)} follow-on task(s) not complete" if other else ""
+            print(f"  {orig:<20} -> {new:<20} {t['status_label']:<12} {t['end_date'] or ''} "
+                  f"{(t['results_text'] or '')[:60]}{pending}")
+        if not a.wait or done == len(scope.pairs):
+            break
+        if time.time() > deadline:
+            raise SystemExit("timed out waiting for tasks")
+        time.sleep(60)
+    runner.close()
+    if a.wait:
+        print("all copy and convert tasks finished; wait a few minutes for the reporting database before post")
+
+
 def cmd_sql(a, cfg):
     scope = _scope(a, cfg)
     if a.scope == "original":
@@ -118,6 +155,11 @@ def main(argv=None):
     sp.add_argument("--baseline", required=True, help="the pre-scan run folder")
     sp.add_argument("--out", required=True, help="new run folder")
     sp.set_defaults(fn=cmd_post)
+    sp = sub.add_parser("tasks", help="show (or --wait for) the copy and convert task of each course")
+    scoped(sp)
+    sp.add_argument("--wait", action="store_true", help="poll every minute until every task finishes")
+    sp.add_argument("--timeout", type=int, default=120, help="minutes to wait (default 120)")
+    sp.set_defaults(fn=cmd_tasks)
     sp = sub.add_parser("render", help="rebuild reports from a saved run (no database)")
     sp.add_argument("run")
     sp.set_defaults(fn=cmd_render)
