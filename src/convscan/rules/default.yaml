@@ -38,6 +38,7 @@ rules:
   - id: open_attempts_at_freeze
     title: Test attempts open now
     source: S12
+    where: {open_attempts__gt: 0}
     measure: sum(open_attempts)
     severity: 1
     known: true
