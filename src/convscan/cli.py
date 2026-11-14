@@ -1,4 +1,6 @@
-"""convscan command line: check, pre, post, render, sql."""
+"""convscan: read-only scans and reports for Original-to-Ultra course conversion.
+
+Commands: check, pre, post, tasks, render, sql. See README.md, "A batch, step by step"."""
 from __future__ import annotations
 
 import argparse

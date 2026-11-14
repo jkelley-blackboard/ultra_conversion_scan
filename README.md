@@ -71,7 +71,7 @@ named another way, set `new_id_suffix` in the config or give each `new_course_id
 | Option | Effect |
 |---|---|
 | `--config file.yaml` | Settings: who the reports are for, the ID suffix, the ID length limit, query timeout. See [config.example.yaml](config.example.yaml) |
-| `--no-learner` | Skip the queries that return a row per learner (S7, S7b, S8b, S10, S12b). Quicker, but the hand-off can't check learner records |
+| `--no-learner` | Skip the queries that return a row per learner (S7, S8b, S10, S12b). Quicker, but the hand-off can't check learner records |
 | `--suffix ""` | Override the suffix. An empty suffix compares each course with itself, which is a quick way to test the tool |
 
 ## What the reports say
@@ -144,13 +144,12 @@ a row per learner and are the large ones.
 | S3c | Every content type in the course, with how many items of each are hidden |
 | S3b | Every item with its folder path, availability and depth |
 | S4 | Grade columns: type, attached item, visibility, calculated or not |
-| S5, S5b | Questions with partial credit, by how the test is used (routes learners, gates content, or just graded) |
+| S5b | Questions with partial credit per course, by how their tests are used (route learners, open the next step, or just graded) |
 | S5c | Each partial-credit question's answer values: the repair list and its baseline |
 | S5d | Question types in every test, including those Ultra removes |
 | S5e | Pools, question banks, and questions drawn into tests by random blocks |
 | S6 | SCORM package settings |
 | S7 | Per learner: grades and attempts on every column (open, submitted, waiting for grading) |
-| S7b | Per learner: a one-row summary |
 | S8, S8b | Groups and what uses them; per learner: group membership |
 | S9 | Every release condition, with its groups and named learners |
 | S10 | Per learner: SCORM attempts and a fingerprint of the saved resume state |
@@ -284,7 +283,7 @@ about 315,000 learner rows) is read three times by a post-scan and held in memor
 2. Re-read the Originals only for columns that differ.
 3. Scan the largest courses on their own, one at a time, off-peak.
 4. Stream results instead of loading them whole, and compress the CSVs.
-5. Drop S7b (it repeats S7), and rewrite the row-by-row counts in S7b and S8 as joins.
+5. Rewrite the row-by-row counts in S8 as joins.
 
 **Other:**
 

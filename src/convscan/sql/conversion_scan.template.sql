@@ -20,7 +20,7 @@
 --     manifest). Only M2 uses it.
 --   * SELECT only. Learners appear as users_pk1 or course_users.pk1, never by name,
 --     username or email. users_pk1 is the same in the Original and the copy.
---   * S7, S7b, S8b, S9, S10 and S12b return one row per learner (per item) and are large for
+--   * S7, S8b, S9, S10 and S12b return one row per learner (per item) and are large for
 --     XL shells: run them per batch, off-peak, and save as CSV.
 --   * The replica lags production by a few minutes at most: wait a few minutes after a
 --     copy or repair before the post-scan.
@@ -207,78 +207,26 @@ order by s.course_id, gm.position, gm.pk1;
 
 
 -- ===========================================================================
--- S5. Partial-credit questions in every test, classified by how the test is used.
---     Conversion resets partial credit to 0% on every answer except the correct one
+-- S5b. Partial-credit questions per course, by how their tests are used.
+--     Conversion sets partial credit to 0% on every answer except the correct one
 --     (observed 2026-11-10). Scores already earned are kept; new attempts score lower.
 --     REMEDIATION (adopted 2026-11-12): fix ALL partial-credit questions. They are
 --     tier 1 only where the test gates or otherwise controls progress, and then only for
---     learners who haven't taken it yet (new students, and in-progress learners who
---     haven't reached it). Everything else is tier 2.
+--     learners who haven't taken it yet. Everything else is tier 2.
 --       routing   : test read by 2+ distinct score ranges (a score selector)      -> tier 1
 --       gate      : test read by a score criterion (pass mark opens the next step)  -> tier 1
 --       graded    : test counts for a grade but gates nothing                       -> tier 2
 --     QUESTION SOURCES (confirmed on demo 2026-11-13):
 --       direct    : question (asi_type 3) -> section (2) -> test (1, the column's qti_asi_data_pk1)
 --       via block : a random block or question set sits at question level in the test's
---                   section; qti_block_mapping links it to the questions it draws from, in a
---                   pool (assessmenttype 4) or another test (for example an "ALL QUESTIONS"
---                   test). On demo the direct route alone missed 565 questions in 75 tests,
---                   67 of them entirely.
---     Answer weights are in qti_asi_data.data (XML, bytea): read them per course afterwards
---     (S5c below, or an instructor look). A pool question shared by several tests
---     is fixed once in the pool, but appears here once per test that draws on it.
+--                   section, and qti_block_mapping links it to the questions it draws from, in
+--                   a pool (assessmenttype 4) or another test (for example an "ALL QUESTIONS"
+--                   test). On demo the direct route alone missed 565 questions in 75 tests.
+--     LIMIT: a test that gates only through a calculated column (for example a "Module Score"
+--     that is the maximum of a test and an always-zero column) counts as graded here. The
+--     calculated_gates rule (S9) flags those courses.
+--     (Labeled S5b because an earlier per-question S5 was retired: S5c has the detail.)
 -- ===========================================================================
-with scope as ({SCOPE}),
-tests as (
-  select s.course_id, gm.pk1 as col_pk, gm.title as test_title, gm.visible_ind, gm.qti_asi_data_pk1 as asmt_pk
-  from scope s
-  join gradebook_main gm on gm.crsmain_pk1 = s.crs_pk and gm.qti_asi_data_pk1 is not null
-                        and coalesce(gm.deleted_ind, 'N') = 'N'),
-questions as (
-  select t.col_pk, q.pk1 as question_pk, 'direct' as source, null::text as drawn_from
-  from tests t
-  join qti_asi_data sec on sec.parent_pk1 = t.asmt_pk
-  join qti_asi_data q   on q.parent_pk1 = sec.pk1 and q.bbmd_partialcredit = 'Y'
-  union all
-  select t.col_pk, pq.pk1, 'via block',
-         case pa.bbmd_assessmenttype when 4 then 'pool: ' else 'test: ' end || pa.title
-  from tests t
-  join qti_asi_data sec on sec.parent_pk1 = t.asmt_pk
-  join qti_asi_data blk on blk.parent_pk1 = sec.pk1
-  join qti_block_mapping m on m.question_block_pk1 = blk.pk1
-  join qti_asi_data pq  on pq.pk1 = m.question_pk1 and pq.bbmd_partialcredit = 'Y'
-  left join qti_asi_data ps on ps.pk1 = pq.parent_pk1
-  left join qti_asi_data pa on pa.pk1 = ps.parent_pk1),
-score_use as (                               -- how release rules read each test column
-  select ac.gradebook_main_pk1 as col_pk,
-         count(distinct (ac.min_score, ac.max_score)) filter (where ac.crit_type like 'GRADE_RANGE%') as ranges
-  from avl_crit ac
-  where ac.gradebook_main_pk1 in (select col_pk from tests)
-  group by ac.gradebook_main_pk1),
-grades as (
-  select gg.gradebook_main_pk1 as col_pk, count(*) as learners_with_grade
-  from gradebook_grade gg where gg.gradebook_main_pk1 in (select col_pk from tests)
-  group by gg.gradebook_main_pk1)
--- LIMIT: a test that gates only through a calculated column (for example a "Module Score"
--- that is the maximum of an end-of-module test and an always-zero column) shows here as "graded". Calculated-
--- column inputs aren't in a documented table, so post-processing must upgrade those tests
--- to "gate" when S9 shows a score criterion on a calculated column in the same course.
-select t.course_id, t.col_pk, t.test_title, t.visible_ind,
-  coalesce(u.ranges, 0)                                   as score_ranges_reading_test,
-  case when coalesce(u.ranges, 0) >= 2 then 'routing (tier 1)'
-       when coalesce(u.ranges, 0) = 1 then 'gate (tier 1)'
-       else 'graded (tier 2)' end                         as partial_credit_risk,
-  q.source, q.drawn_from,
-  qq.pk1 as question_pk, qq.title as question_title, qq.bbmd_questiontype, qq.qmd_absolutescore_max,
-  coalesce(g.learners_with_grade, 0)                      as learners_with_grade
-from tests t
-join questions q       on q.col_pk = t.col_pk
-join qti_asi_data qq   on qq.pk1 = q.question_pk
-left join score_use u  on u.col_pk = t.col_pk
-left join grades g     on g.col_pk = t.col_pk
-order by t.course_id, partial_credit_risk, t.col_pk, q.source, qq.position;
-
--- S5b. Per course: how many partial-credit questions, by risk and source
 with scope as ({SCOPE}),
 tests as (
   select s.course_id, gm.pk1 as col_pk, gm.qti_asi_data_pk1 as asmt_pk
@@ -523,30 +471,6 @@ left join att           on att.gradebook_grade_pk1 = gg.pk1
 left join attempt la    on la.pk1 = gg.last_attempt_pk1
 left join attempt ha    on ha.pk1 = coalesce(gg.highest_attempt_pk1, gg.last_attempt_pk1)
 order by s.course_id, cu.users_pk1, gm.pk1;
-
--- S7b. Per-learner summary (one row per student): a quick compare before the full S7
-with scope as ({SCOPE}),
-g as (
-  select gg.course_users_pk1, count(*) as grade_rows,
-         count(*) filter (where gg.manual_score is not null) as overrides,
-         sum((select count(*) from attempt a where a.gradebook_grade_pk1 = gg.pk1)) as attempts
-  from scope s
-  join gradebook_main gm  on gm.crsmain_pk1 = s.crs_pk and coalesce(gm.deleted_ind, 'N') = 'N'
-  join gradebook_grade gg on gg.gradebook_main_pk1 = gm.pk1
-  group by gg.course_users_pk1),
-grp as (
-  select gu.course_users_pk1, count(*) as group_memberships
-  from scope s join groups gr on gr.crsmain_pk1 = s.crs_pk join group_users gu on gu.groups_pk1 = gr.pk1
-  group by gu.course_users_pk1)
-select s.course_id, cu.users_pk1, cu.available_ind,
-  coalesce(g.grade_rows, 0) as grade_rows, coalesce(g.overrides, 0) as overrides,
-  coalesce(g.attempts, 0) as attempts, coalesce(grp.group_memberships, 0) as group_memberships
-from scope s
-join course_users cu on cu.crsmain_pk1 = s.crs_pk and cu.role = 'S' and cu.row_status = 0
-left join g   on g.course_users_pk1 = cu.pk1
-left join grp on grp.course_users_pk1 = cu.pk1
-order by s.course_id, cu.users_pk1;
-
 
 -- ===========================================================================
 -- S8. Groups, members, and what uses each group: release criteria and test exceptions

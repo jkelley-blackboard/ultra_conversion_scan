@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import csv
-import datetime as dt
 import pathlib
 
 import jinja2
@@ -81,7 +80,7 @@ def render_pre(run_dir: pathlib.Path, run: dict, data: dict, cfg: dict) -> list[
     out = run_dir / "reports"
     out.mkdir(exist_ok=True)
     ran = _ran(run)
-    common = {"run": run, "cfg": cfg, "version": __version__, "today": dt.date.today().isoformat(),
+    common = {"run": run, "cfg": cfg, "version": __version__,
               "not_checked_by_sql": doc.get("not_checked_by_sql", []), "severity": rules.SEVERITY,
               "settings": site_settings(data)}
     written, summary = [], []
@@ -107,7 +106,7 @@ def render_post(run_dir: pathlib.Path, run: dict, data: dict, base_run: dict, ba
     out.mkdir(exist_ok=True)
     ran_base, ran_post = _ran(base_run), _ran(run)
     common = {"run": run, "base_run": base_run, "cfg": cfg, "version": __version__,
-              "today": dt.date.today().isoformat(), "settings": site_settings(data)}
+              "settings": site_settings(data)}
     written, summary, all_map, all_diffs = [], [], [], []
     for o, n in run["pairs"]:
         checks, diffs = compare.compare_course(o, n, base, data, ran_base, ran_post)

@@ -9,7 +9,7 @@ from .config import PACKAGE
 TEMPLATE = PACKAGE / "sql" / "conversion_scan.template.sql"
 
 # Per-learner queries: large on big courses, skippable with --no-learner.
-LEARNER = {"S7", "S7b", "S8b", "S10", "S12b"}
+LEARNER = {"S7", "S8b", "S10", "S12b"}
 
 # Re-read from the Originals during the post-scan, saved as <label>_now.
 NOW = {"S2", "S7", "S10"}
