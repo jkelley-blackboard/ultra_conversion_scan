@@ -13,6 +13,8 @@ DEFAULTS = {
     "max_course_id_length": 15,
     "statement_timeout_s": 900,
     "learner_queries": True,
+    "max_replica_lag_s": 300,   # post refuses to run while the reporting database trails by more
+                                # than this (--ignore-lag overrides)
     "rules": None,
     "templates": None,
 }

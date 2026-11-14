@@ -19,10 +19,10 @@ a hand-off report and an ID map for two invented courses, one with typical losse
 
 | Step | Command | What you get |
 |---|---|---|
-| 1. Once per site, check the database has everything the queries need | `convscan check` | "every table and column is present", or a list of what's missing |
+| 1. Once per site, check the database has everything the queries need | `convscan check` | "every table and column is present", or a list of what's missing, plus the replica lag (or why it can't be read) |
 | 2. Before the batch, scan the Original courses | `convscan pre --manifest batch01.csv --out runs\batch01_pre` | A **pre-conversion report** per course and a batch summary. The saved data becomes the **baseline** |
-| 3. At the freeze, make the Originals unavailable and run the bulk copy and convert. Watch it finish | `convscan tasks --manifest batch01.csv --wait` | Each course's copy task, polled every minute until all are done |
-| 4. Wait a few minutes for the reporting database to catch up, then scan the copies | `convscan post --manifest batch01.csv --baseline runs\batch01_pre --out runs\batch01_post` | A **hand-off report** per course, a batch summary and the **ID map** |
+| 3. At the freeze, make the Originals unavailable and run the bulk copy and convert. Watch it finish | `convscan tasks --manifest batch01.csv --wait` | Each course's copy task, polled every minute until all are done, then the replica lag until the reporting database has caught up |
+| 4. Scan the copies. The reporting database is a read replica, and a large batch of copies can make it trail production, so `post` checks the lag first and won't run while it's over `max_replica_lag_s` (300 s by default) | `convscan post --manifest batch01.csv --baseline runs\batch01_pre --out runs\batch01_post` | A **hand-off report** per course, a batch summary and the **ID map** |
 | 5. Run the repairs (groups, partial credit), then scan the copies again | `convscan post ... --out runs\batch01_post2` | The repaired items should now read "Same" |
 
 Two more commands help along the way:
@@ -77,6 +77,7 @@ named another way, set `new_id_suffix` in the config or give each `new_course_id
 |---|---|
 | `--config file.yaml` | Settings: who the reports are for, the ID suffix, the ID length limit, query timeout. See [config.example.yaml](config.example.yaml) |
 | `--no-learner` | Skip the queries that return a row per learner (S7, S8b, S10, S12b). Quicker, but the hand-off can't check learner records |
+| `--ignore-lag` | `post` only: run even while the reporting database trails production. The hand-off report then warns that its losses may not be real yet |
 | `--suffix ""` | Override the suffix. An empty suffix compares each course with itself, which is a quick way to test the tool |
 
 ## What the reports say
@@ -261,6 +262,9 @@ The reports list these under "Not checked":
 **Before production:**
 
 - Run `check` and `pre` on a production site, starting with its largest course, and time them.
+- Confirm `check` can read the replica lag there. The DDA user may not be allowed to call
+  `pg_last_wal_receive_lsn()` and the related functions; if not, `post` runs with the lag shown as
+  unknown and the hand-off report says so.
 - Agree the new course ID format with the institution (the hyphen above), and read the site's
   conversion settings with them (S14) before the first batch.
 
@@ -286,7 +290,8 @@ about 315,000 learner rows) is read three times by a post-scan and held in memor
 1. Compare one fingerprint per course and column (and per SCORM package), computed in the database;
    fetch learner rows only where fingerprints differ.
 2. Re-read the Originals only for columns that differ.
-3. Scan the largest courses on their own, one at a time, off-peak.
+3. Scan the largest courses on their own, one at a time. (Time of day doesn't matter: DDA is a read
+   replica, so scans don't load the production database.)
 4. Stream results instead of loading them whole, and compress the CSVs.
 5. Rewrite the row-by-row counts in S8 as joins.
 

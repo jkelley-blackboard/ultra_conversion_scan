@@ -59,6 +59,21 @@ def test_id_map(tmp_path):
     assert [r for r in rows if r["kind"] == "course" and r["new_id"] == "_901_1"]
 
 
+def test_handoff_warns_when_scanned_behind_the_replica(tmp_path):
+    import json
+    pre_dir, post_dir = sample_data.write_runs(tmp_path)
+    run_json = post_dir / "run.json"
+    run = json.loads(run_json.read_text(encoding="utf-8"))
+    run["replica_lag"] = {"lag_s": 900.0, "note": "900 s behind, still applying changes"}
+    run_json.write_text(json.dumps(run), encoding="utf-8")
+    cfg = config.load(None)
+    pre_run, pre = load_run(pre_dir)
+    post_run, post = load_run(post_dir)
+    report.render_post(post_dir, post_run, post, pre_run, pre, cfg)
+    text = (post_dir / "reports" / "DEMO101_handoff.md").read_text(encoding="utf-8")
+    assert "900 s behind" in text and "scan again before acting" in text
+
+
 def test_no_em_dashes_in_reports(tmp_path):
     pre, post = _render(tmp_path)
     for f in list(pre.glob("*.md")) + list(post.glob("*.md")):

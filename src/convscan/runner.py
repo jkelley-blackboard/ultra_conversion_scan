@@ -46,6 +46,36 @@ class DdaRunner:
         self.conn.close()
 
 
+LAG_SQL = """select pg_is_in_recovery() as replica,
+       pg_last_wal_receive_lsn() = pg_last_wal_replay_lsn() as caught_up,
+       extract(epoch from now() - pg_last_xact_replay_timestamp())::float as since_last_replay_s"""
+
+
+def replica_lag(runner: Runner) -> dict:
+    """How far the reporting database (a PostgreSQL read replica) trails production.
+
+    Returns {"lag_s": seconds or None, "note": text}. When the replica has applied everything it has
+    received, the lag is 0: the time since the last replayed change only measures lag while changes
+    are still waiting (on a quiet site it just grows). It can't see changes production hasn't sent
+    yet. lag_s is None when the database won't say (for example, the DDA user may not be allowed to
+    call these functions).
+    """
+    try:
+        cols, rows = runner.query(LAG_SQL)
+    except Exception as e:   # permission denied, or not PostgreSQL
+        msg = str(e).strip().splitlines()[0] if str(e).strip() else type(e).__name__
+        return {"lag_s": None, "note": f"could not read the replica lag ({msg})"}
+    r = dict(zip(cols, rows[0]))
+    if not r["replica"]:
+        return {"lag_s": 0.0, "note": "not a replica (reads production directly)"}
+    if r["caught_up"]:
+        return {"lag_s": 0.0, "note": "caught up"}
+    if r["since_last_replay_s"] is None:
+        return {"lag_s": None, "note": "replica has not replayed any changes yet"}
+    lag = round(max(r["since_last_replay_s"], 0.0), 1)
+    return {"lag_s": lag, "note": f"{lag:,.0f} s behind, still applying changes"}
+
+
 def _cell(v) -> str:
     if v is None:
         return ""

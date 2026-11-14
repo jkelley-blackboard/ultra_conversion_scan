@@ -6,6 +6,8 @@ new_id_suffix: "-7777"                  # copy course_id = Original course_id + 
                                         # convert always adds a hyphen before its suffix, so include it
 max_course_id_length: 15                # flag new IDs longer than this (0 = no limit)
 statement_timeout_s: 900                # per query, on the database side
-learner_queries: true                   # false = skip S7, S7b, S8b, S10, S12b (same as --no-learner)
+learner_queries: true                   # false = skip S7, S8b, S10, S12b (same as --no-learner)
+max_replica_lag_s: 300                  # post won't run while the reporting database (a read replica)
+                                        # trails production by more than this; --ignore-lag overrides
 rules: null                             # path to a rule table; null = the packaged default
 templates: null                         # folder of .md.j2 templates; null = the packaged ones

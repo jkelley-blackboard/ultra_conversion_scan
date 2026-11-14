@@ -6,6 +6,10 @@
 **Prepared for:** {{ cfg.prepared_for }} | **Post-scan:** {{ run.finished[:10] }} | **Baseline:** {{ base_run.finished[:10] }} | **Batch:** {{ run.name }}
 
 > Generated from the LMS reporting database by convscan {{ version }}, by comparing the Ultra copy with the Original as scanned before conversion.
+{% if run.replica_lag is defined %}
+> Reporting database at the time of the scan: {{ run.replica_lag.note }}.{% if run.replica_lag.lag_s is none %} Check that the copy looks complete before relying on any losses below.{% elif run.replica_lag.lag_s > cfg.max_replica_lag_s %} The scan ran anyway, so losses below may be changes not yet copied to it: scan again before acting on them.{% endif %}
+
+{% endif %}
 
 ## Summary
 

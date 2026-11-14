@@ -9,7 +9,7 @@ import pathlib
 import sys
 
 from . import config, kit, report
-from .runner import DdaRunner, load_run, run_kit
+from .runner import DdaRunner, load_run, replica_lag, run_kit
 from .scope import Scope
 
 
@@ -42,6 +42,8 @@ def cmd_check(a, cfg):
             print("  ", r[0], r[1])
         sys.exit(1)
     print("S0: every table and column the kit uses is present")
+    print(f"replica lag: {replica_lag(runner)['note']}")
+    runner.close()
 
 
 def cmd_pre(a, cfg):
@@ -63,6 +65,15 @@ def cmd_post(a, cfg):
     if base_run.get("mode") != "pre":
         raise SystemExit(f"{base_dir} is not a pre-scan run")
     pairs = scope.pairs or [(c, c + scope.suffix) for c in sorted({r["course_id"] for r in base.get("S1", [])})]
+    runner = DdaRunner(cfg["statement_timeout_s"])
+    # The reporting database is a read replica. After a large batch of copies it can trail production,
+    # and a scan of half-replicated copies reports losses that aren't real.
+    lag = replica_lag(runner)
+    print(f"replica lag: {lag['note']}")
+    if lag["lag_s"] is not None and lag["lag_s"] > cfg["max_replica_lag_s"] and not a.ignore_lag:
+        runner.close()
+        raise SystemExit(f"the reporting database is more than {cfg['max_replica_lag_s']} s behind; "
+                         "wait and try again (or pass --ignore-lag)")
     out = _new_out(a.out)
     stmts = kit.statements(kit.load_template(), scope.copies_sql(), scope.suffix, pairs_sql=scope.pairs_sql(),
                            skip=_skip(a, cfg) | {"S0"})
@@ -72,9 +83,9 @@ def cmd_post(a, cfg):
               kit.statements(kit.load_template(), scope.originals_sql(), scope.suffix,
                              only=kit.NOW, skip=_skip(a, cfg))]
     print(f"post-scan, {scope.describe()}, {len(stmts)} queries -> {out}")
-    runner = DdaRunner(cfg["statement_timeout_s"])
     run_kit(runner, stmts, out, {"mode": "post", "name": out.name, "scope": scope.describe(),
-                                 "suffix": scope.suffix, "pairs": pairs, "baseline": str(base_dir.resolve())})
+                                 "suffix": scope.suffix, "pairs": pairs, "baseline": str(base_dir.resolve()),
+                                 "replica_lag": lag})
     runner.close()
     _render(out, cfg)
 
@@ -125,9 +136,22 @@ def cmd_tasks(a, cfg):
         if time.time() > deadline:
             raise SystemExit("timed out waiting for tasks")
         time.sleep(60)
-    runner.close()
     if a.wait:
-        print("all copy and convert tasks finished; wait a few minutes for the reporting database before post")
+        print("all copy and convert tasks finished; checking the reporting database has caught up")
+        while True:
+            lag = replica_lag(runner)
+            print(f"  {time.strftime('%H:%M:%S')} replica lag: {lag['note']}")
+            if lag["lag_s"] is None:
+                print("  lag unknown: check that the copies look complete before running post")
+                break
+            if lag["lag_s"] <= cfg["max_replica_lag_s"]:
+                print("  ready for post")
+                break
+            if time.time() > deadline:
+                runner.close()
+                raise SystemExit("timed out waiting for the reporting database to catch up")
+            time.sleep(30)
+    runner.close()
 
 
 def cmd_sql(a, cfg):
@@ -161,10 +185,13 @@ def main(argv=None):
     scoped(sp)
     sp.add_argument("--baseline", required=True, help="the pre-scan run folder")
     sp.add_argument("--out", required=True, help="new run folder")
+    sp.add_argument("--ignore-lag", action="store_true",
+                    help="run even if the reporting database trails production by more than max_replica_lag_s")
     sp.set_defaults(fn=cmd_post)
     sp = sub.add_parser("tasks", help="show (or --wait for) the copy and convert task of each course")
     scoped(sp)
-    sp.add_argument("--wait", action="store_true", help="poll every minute until every task finishes")
+    sp.add_argument("--wait", action="store_true",
+                    help="poll every minute until every task finishes, then until the reporting database catches up")
     sp.add_argument("--timeout", type=int, default=120, help="minutes to wait (default 120)")
     sp.set_defaults(fn=cmd_tasks)
     sp = sub.add_parser("render", help="rebuild reports from a saved run (no database)")
