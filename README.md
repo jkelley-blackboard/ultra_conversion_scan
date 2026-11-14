@@ -53,11 +53,15 @@ scope (manifest CSV or hierarchy node)
 
 Python 3.10 or later.
 
+From the repo folder:
+
 ```powershell
-pip install -e "C:\Users\JeffKelley\OneDrive - Anthology Inc\github\ultra_conversion_scan"
+pip install -e ".[dev]"
+python -m pytest
 ```
 
-That installs `psycopg2-binary`, `PyYAML` and `Jinja2`, and the `convscan` command.
+That installs `psycopg2-binary`, `PyYAML`, `Jinja2` and pytest. Run the tool as `convscan ...`, or as
+`python -m convscan ...` if the Python Scripts folder isn't on `PATH`.
 
 ## Connection
 
