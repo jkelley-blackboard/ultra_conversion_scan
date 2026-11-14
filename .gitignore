@@ -2,6 +2,7 @@
 runs/
 *.csv
 !examples/*.csv
+!examples/sample_reports/**/*.csv
 
 # Local config may name a site
 config.yaml

@@ -10,6 +10,11 @@ report.
 **Status (2026-11-14):** working, and tested on four real copy-and-convert runs on a demo site (2 to
 10 learners per course). Not yet run on a production site.
 
+**See it first:** [examples/sample_reports/](examples/sample_reports/) has a pre-conversion report,
+a hand-off report and an ID map for two invented courses, one with typical losses and one clean.
+
+**Maintainer:** TODO (built by Jeff Kelley, Blackboard, November 2026). Internal to Blackboard.
+
 ## A batch, step by step
 
 | Step | Command | What you get |
@@ -309,9 +314,29 @@ src/convscan/
   sql/            conversion_scan.template.sql: every query
   rules/          default.yaml: the rule table
   templates/      preflight.md.j2, handoff.md.j2, batch_summary.md.j2
-tests/            offline tests (no database needed)
-examples/         manifest.csv
+tests/
+  test_core.py        the pieces: splitting the SQL, choosing courses, rules, SCORM decoding
+  test_end_to_end.py  renders pre and post reports from invented runs and checks what they say
+  sample_data.py      those invented runs (two courses, no real data)
+examples/
+  manifest.csv        a manifest to copy
+  sample_reports/     the reports test_end_to_end checks, rendered for reading
+  build_examples.py   rebuilds sample_reports/
 ```
+
+Run `python -m pytest` after any change. None of the tests need a database.
+
+## Common changes
+
+| To | Do this |
+|---|---|
+| Mark a content type as tested (after a test conversion shows it works) | Add it to the `cnthndlr_handle__ne` list in the `content_type_untested` rule, and give it a plain name under `labels` in the same file |
+| Add or reword a finding | Edit [rules/default.yaml](src/convscan/rules/default.yaml) (see "Writing rules"), then `convscan render` a saved run to see the result |
+| Teach the compare a new expected conversion behavior | Find the area's `check_*` function in [compare.py](src/convscan/compare.py) (the `CHECKS` list at the bottom gives the order). Title and type rules are near the top (`norm`, `_HANDLER`, `_RENAMED_BY_CONVERSION`); the column map's matching is in the M2 query |
+| Add a check to the hand-off | Write a `check_*` function that takes a `Pair` and calls `pair.add(...)`, and add it to `CHECKS` |
+| Add a query | Add it to the SQL file with a header line `-- S<n>. What it reads`, add its tables and columns to S0, add the label to `EXPECTED` in `tests/test_core.py`, and to the query table in this README. If it returns a row per learner, add it to `LEARNER` in `kit.py` |
+| Change what a report looks like | Edit the template in [templates/](src/convscan/templates/), then `convscan render` a saved run |
+| Refresh the examples | `python examples/build_examples.py`, and commit the result |
 
 **Editing the SQL:** queries are separated by a semicolon at the end of a line, so a comment line must
 never end in one (a test checks this). Never write a placeholder with its braces in a comment.
