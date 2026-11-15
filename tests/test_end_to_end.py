@@ -42,13 +42,31 @@ def test_handoff_reports_losses_and_matches(tmp_path):
     assert "lost only their group(s)" in text                                # condition kept, group gone
     assert "1 question(s) lost their answer values" in text                  # partial credit reset
     assert "Hidden columns now visible" in text and "Placement Test" in text
-    assert "| SCORM | SCORM records with the same resume state | 3 | 3 | Same |" in text   # HTML title normalized
-    assert "| Learner records | Grade and attempt records matching | 9 | 9 | Same |" in text
+    assert "| SCORM | SCORM records with the same resume state | 2 | 2 | Same |" in text   # HTML title normalized
+    assert "| Learner records | Grade and attempt records matching | 6 | 6 | Same |" in text
+    assert ("| Learner records | Unavailable students' records | 1 learner(s), 4 record(s) | "
+            "1 learner(s), 4 record(s) | Same |") in text
+    assert "compared as totals, not one by one" in text
     assert "Ultra drops the weighted total column." in text
     assert "Added by conversion: Document +2; Folder +2." in text            # plain names, not system values
     clean = (post / "DEMO102_handoff.md").read_text(encoding="utf-8")
     assert "Needs action" not in clean                                       # assignment -> assessment is fine
     assert "Ready to verify and release" in clean
+
+
+def test_inactive_totals_that_differ_are_reported():
+    from convscan import compare
+    row = lambda c, grades, scorm: {"course_id": c, "state": "unavailable", "learners": 1, "grade_rows": grades,
+                                    "attempts": grades, "open": 0, "needs_grading": 0, "scorm_registrations": scorm}
+    base = {"S1": [{"course_id": "A"}], "S2b": [row("A", 3, 1)]}
+    post = {"S1": [{"course_id": "A-7777"}], "S2b": [row("A-7777", 3, 0)], "S2b_now": [row("A", 3, 1)]}
+    checks, _ = compare.compare_course("A", "A-7777", base, post, {"S2b"}, {"S2b", "S2b_now"})
+    c = next(k for k in checks if k["check"] == "Unavailable students' records")
+    assert c["status"] == compare.DIFFERENT and "SCORM records 1 to 0" in c["note"]
+    # Access that changed after the pre-scan: the copy matches the Original now.
+    post["S2b_now"] = [row("A", 3, 0)]
+    checks, _ = compare.compare_course("A", "A-7777", base, post, {"S2b"}, {"S2b", "S2b_now"})
+    assert next(k for k in checks if k["check"] == "Unavailable students' records")["status"] == compare.EXPECTED
 
 
 def test_id_map(tmp_path):

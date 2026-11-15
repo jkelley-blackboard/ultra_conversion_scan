@@ -83,6 +83,7 @@ a row per learner and are the large ones.
 | S0 | Every table and column the queries use (`convscan check`) |
 | S1 | Course identity, availability, and whether the new ID is free |
 | S2 | Members: staff, students in progress, completed and disabled, recent access |
+| S2b | Totals for unavailable and disabled students: learners, grade records, attempts, SCORM records |
 | S3 | Content counts: tests, assignments, SCORM, discussions, LTI, hidden and dated items, Content Collection links |
 | S3c | Every content type in the course, with how many items of each are hidden |
 | S3b | Every item with its folder path, availability and depth |
@@ -94,10 +95,10 @@ a row per learner and are the large ones.
 | S5e | Pools, question banks, and questions drawn into tests by random blocks |
 | S5f | Undeployed tests, how many questions other tests draw from each, and whether the site turns them into question banks |
 | S6 | SCORM package settings |
-| S7 | Per learner: grades and attempts on every column (open, submitted, waiting for grading) |
+| S7 | Per learner in progress: grades and attempts on every column (open, submitted, waiting for grading) |
 | S8, S8b | Groups and what uses them; per learner: group membership |
 | S9 | Every release condition, with its groups and named learners |
-| S10 | Per learner: SCORM attempts and a fingerprint of the saved resume state |
+| S10 | Per learner in progress: SCORM attempts and a fingerprint of the saved resume state |
 | S11 | Discussion volume |
 | S12 | Test settings (time limit, auto-submit, attempts, passwords, proctoring) and open attempts |
 | S12b | Per learner or group: test exceptions (extra time or attempts) |
@@ -186,8 +187,25 @@ counts only.
 No query selects a name, username or email (the SQL header says so, and `convscan sql` prints exactly
 what runs). `--no-learner` leaves out the per-learner queries altogether.
 
+**Which learners are read one by one** (since 2026-11-15). The `{LEARNERS}` placeholder in S7, S8b and
+S10 is filled in by `kit.py`:
+
+- **`pre` (default):** `and cu.available_ind = 'Y'`, students in progress only. Unavailable and disabled
+  students can't resume, so S2b totals their records instead, and `check_inactive_records` compares the
+  totals. `run.json` records `"learners": "active"`.
+- **`pre --all-learners`:** empty, every enabled student, as before. Recorded as `"all"`.
+- **`post`:** the learners its baseline read, course by course, on both the copy and the `_now`
+  re-read (`kit.learner_filter`). Matching on the baseline's learners, not their state now, means a
+  learner whose access ends or is extended between the scans is still compared. Per course, so a
+  learner in progress in one course isn't read in another where they're inactive. A baseline without
+  `learners` in its `run.json` predates the change and read everyone, so its post-scan does too.
+
+The post filter is a `VALUES` list of (course, learner) pairs, two per learner (Original and copy).
+At a large site's scale (200,000 learners in progress, say) a 100-course batch could make that list a few
+megabytes per query. That's fine for PostgreSQL, but if it's slow, load the pairs into a temporary table instead.
+
 A run has two folders (`paths.py`): its data folder, `data_dir/<name>`, holds `run.json` and
-`data/*.csv` (one per query; post-scans add `S2_now`, `S7_now` and `S10_now`, the Originals re-read);
+`data/*.csv` (one per query; post-scans add `S2_now`, `S2b_now`, `S7_now` and `S10_now`, the Originals re-read);
 its reports folder, `reports_dir/<name>`, holds the reports, `idmap.csv` and a copy of `run.json`.
 `run.json` records the reports folder, so `render` writes back to it. A path given as `--out` keeps
 the older single-folder layout. Git ignores `runs/`. What the scan can't check is

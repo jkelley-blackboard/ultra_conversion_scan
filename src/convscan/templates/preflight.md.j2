@@ -29,7 +29,7 @@
 | Available to learners now | {{ c.available }} |
 | Members | {{ c.members | n }} ({{ c.staff | n }} staff, {{ c.students | n }} students) |
 | Students in progress | {{ c.in_progress | n }} ({{ c.ip_lt30d | n }} active in the last 30 days, {{ c.ip_gt90d | n }} not for 90 days or more, {{ c.ip_never | n }} never accessed) |
-| Students completed | {{ c.completed | n }} |
+| Students completed or expired | {{ c.completed | n }} (unavailable: copied, and counted rather than read one by one) |
 | Disabled students | {{ c.students_disabled | n }} (copied too) |
 | Content | {{ c.item_count | n }} items: {{ c.tests | n }} tests, {{ c.assignments | n }} assignments, {{ c.scorm | n }} SCORM, {{ c.forum_links | n }} discussion links, {{ c.lti_items | n }} LTI links |
 | Gated items | {{ c.gated_items | n }} |
@@ -75,6 +75,9 @@ These site-wide settings decide how the course converts. Agree them before the f
 {% for item in not_checked_by_sql %}
 - {{ item }}
 {% endfor %}
+{% if run.get("learners") == "active" %}
+- Each record of students who are unavailable or disabled: the scan counts their grades, attempts and SCORM records instead of reading them one by one.
+{% endif %}
 {% for nc in not_checked %}
 - {{ nc.title }} ({{ nc.reason }}).
 {% endfor %}

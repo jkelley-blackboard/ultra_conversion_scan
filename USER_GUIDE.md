@@ -49,8 +49,11 @@ the same report, whoever runs it.
 data, including learner-level records, goes to a local data folder. Its reports go to a reports folder,
 which is what you share. Names are never reused, so nothing is overwritten.
 
-**Learners appear only as numbers.** convscan saves no names, usernames, email addresses or student IDs.
-Learners appear in the saved data only as internal database keys, and the reports contain counts only.
+**Learners appear only as numbers, and only learners in progress are read one by one.** convscan saves
+no names, usernames, email addresses or student IDs. Learners appear in the saved data only as internal
+database keys, and the reports contain counts only. Students who are unavailable (they've completed,
+or their access has expired) or disabled can't resume, so by default their records are counted, not read: the
+copy keeps them, and the hand-off compares the totals.
 
 ## Set up
 
@@ -203,6 +206,12 @@ Run it again at the freeze, once the courses are unavailable and just before the
 new name such as `batch01_freeze`. That baseline is as close as possible to what gets copied; use its
 name as `--baseline` in step 4.
 
+The pre-scan reads each learner's grades, attempts and SCORM progress only for students in progress.
+For unavailable and disabled students it saves totals per course. To read everyone's records one by
+one, add `--all-learners`. Do this for one sample course per course pattern, to confirm once that
+unavailable students' records carry over exactly. It's also worth doing where learners can have their
+access extended after the conversion. The post-scan always reads the same learners its baseline read.
+
 ### 3. Run the copy and convert, and watch it
 
 The copy itself happens in the LMS, not in convscan. Make the Originals unavailable to learners first:
@@ -280,8 +289,9 @@ over, and there's a script to restore them). One not marked known needs a closer
 
 It opens with the copy task's outcome, then lists every check comparing the Ultra copy with the
 baseline: members, content, availability, grade columns, groups, release conditions, partial credit,
-question types and sources, test exceptions, work in progress, every learner's grades and attempts, and
-SCORM resume state. Each check has a result:
+question types and sources, test exceptions, work in progress, the grades and attempts of every learner
+in progress, their SCORM resume state, and totals for unavailable and disabled students. Each check has
+a result:
 
 | Result | Meaning | What to do |
 |---|---|---|
@@ -293,7 +303,8 @@ SCORM resume state. Each check has a result:
 
 Learners may keep working in the Originals after the pre-scan. That isn't counted as a loss: the
 post-scan re-reads the Originals, and a copy that matches either the baseline or the Original as it is
-now counts as a match.
+now counts as a match. The same goes for a learner whose access ends or is extended between the scans:
+the post-scan still compares the learners its baseline read.
 
 ### The ID map
 
@@ -313,8 +324,9 @@ Original course and grade column ID beside its Ultra counterpart, with how it wa
 ## Look after the data
 
 Reports and data have different audiences, so they live apart. Reports are for sharing. The data holds
-grade and attempt records for every learner, by internal key, and it stays on the computer that ran
-the scan until the batch is signed off.
+grade, attempt and SCORM records for every learner in progress (every enabled learner with
+`--all-learners`), by internal key, and it stays on the computer that ran the scan until the batch is
+signed off.
 
 Each run writes two folders:
 
@@ -346,6 +358,8 @@ live in the database at all. The reports list these under "Not checked":
 - **Links inside SCORM packages and Content Collection pages** that point back to the Original course.
 - **Whether linked Content Collection files still exist.**
 - **Calculated column values,** which are worked out when displayed, not stored.
+- **Each record of unavailable and disabled students,** by default: they're compared as totals.
+  A difference in the totals says something was lost, not whose; rerun with `--all-learners` to find out.
 - **Systems outside the LMS** that store course or column IDs: give them the ID map.
 
 ## Troubleshoot
@@ -411,6 +425,7 @@ works in place of a run name; data and reports then stay together in that folder
 |---|---|
 | `--config <file>` | The config to use. Goes before the command name |
 | `--no-learner` | Skips the queries that return a row per learner. Quicker, but the hand-off can't check learner records, and says so |
+| `--all-learners` | `pre` and `sql` only: reads every enabled student's records one by one, not only students in progress. `post` follows its baseline |
 | `--ignore-lag` | `post` only: runs even while the replica is behind |
 | `--suffix <text>` | Overrides the new-ID suffix for this run. `--suffix ""` compares each course with itself, a quick way to try the tool on any site |
 | `--timeout <minutes>` | `tasks --wait` only: how long to wait (120 by default) |

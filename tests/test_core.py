@@ -2,7 +2,7 @@
 from convscan import config, kit, rules
 from convscan.scope import Scope
 
-EXPECTED = ["S0", "S1", "S2", "S3", "S3c", "S3b", "S3d", "S4", "S5b", "S5c", "S5d", "S5e", "S5f", "S6", "S7",
+EXPECTED = ["S0", "S1", "S2", "S2b", "S3", "S3c", "S3b", "S3d", "S4", "S5b", "S5c", "S5d", "S5e", "S5f", "S6", "S7",
             "S8", "S8b", "S9", "S10", "S11", "S12", "S12b", "S13", "S14", "M2"]
 
 
@@ -21,6 +21,27 @@ def test_no_comment_line_ends_in_semicolon():
 def test_placeholders_all_replaced():
     for label, sql in kit.statements(kit.load_template(), "SCOPE_X", "7777", pairs_sql="PAIRS_X"):
         assert "{SCOPE}" not in sql and "{PAIRS}" not in sql and "{SUFFIX}" not in sql, label
+        assert "{LEARNERS}" not in sql, label
+
+
+def test_learner_filter_defaults_to_students_in_progress():
+    by_label = dict(kit.statements(kit.load_template(), "select 1", "7777"))
+    for label in ("S7", "S8b", "S10"):
+        assert "cu.available_ind = 'Y'" in by_label[label], label
+    everyone = dict(kit.statements(kit.load_template(), "select 1", "7777", learners=kit.ALL_LEARNERS))
+    assert "cu.available_ind = 'Y'" not in everyone["S7"]
+
+
+def test_post_scan_reads_the_learners_its_baseline_read():
+    data = {"S7": [{"course_id": "A", "users_pk1": 5002}, {"course_id": "B", "users_pk1": 5001}],
+            "S10": [{"course_id": "A", "users_pk1": 5002}], "S8b": []}
+    pairs = [("A", "A-7777"), ("B", "B-7777")]
+    filt = kit.learner_filter({"learners": "active"}, data, pairs)
+    # Course by course, on the Original and its copy: 5001 isn't read in A, nor 5002 in B.
+    assert "('A', 5002), ('A-7777', 5002), ('B', 5001), ('B-7777', 5001)) as lf(c, u)" in filt
+    assert kit.learner_filter({}, data, pairs) == ""             # an older baseline read everyone
+    assert kit.learner_filter({"learners": "all"}, data, pairs) == ""
+    assert kit.learner_filter({"learners": "active"}, {}, pairs) == "and false"
 
 
 def test_m2_left_out_without_pairs_and_learner_skip():

@@ -149,7 +149,7 @@ def check_members(p: Pair):
     a, b = _one(p.base, "S2", p.o), _one(p.post, "S2", p.n)
     now = (p.now("S2") or [{}])[0] if "S2_now" in p.ran_post else None
     for col, label in (("members", "Active members"), ("students", "Students"),
-                       ("in_progress", "Students in progress"), ("completed", "Students completed"),
+                       ("in_progress", "Students in progress"), ("completed", "Students completed or expired"),
                        ("students_disabled", "Disabled students")):
         ov, nv = a.get(col) or 0, b.get(col) or 0
         if ov == nv:
@@ -492,6 +492,44 @@ def check_scorm(p: Pair):
           + (f"{bad} differ or are missing." if bad else ""))
 
 
+# Totals compared for students whose records aren't read one by one (S2b), with plain names.
+_INACTIVE = (("learners", "learners"), ("grade_rows", "grade records"), ("attempts", "attempts"),
+             ("open", "attempts in progress"), ("needs_grading", "waiting for grading"),
+             ("scorm_registrations", "SCORM records"))
+
+
+def check_inactive_records(p: Pair):
+    """Unavailable and disabled students' records, compared as totals (S2b). They copy too, but by
+    default no one's grades or SCORM state is read one by one unless they're in progress."""
+    if not p.both("S2b"):
+        return
+
+    def totals(rows, state):
+        r = next((x for x in rows if x.get("state") == state), {})
+        return {k: r.get(k) or 0 for k, _ in _INACTIVE}
+
+    def show(t):
+        return f"{t['learners']} learner(s), {t['grade_rows'] + t['scorm_registrations']} record(s)"
+
+    for state, label in (("unavailable", "Unavailable students' records"),
+                         ("disabled", "Disabled students' records")):
+        a, b = totals(p.orig("S2b"), state), totals(p.copy("S2b"), state)
+        if not any(a.values()) and not any(b.values()):
+            continue
+        now = totals(p.now("S2b"), state) if "S2b_now" in p.ran_post else None
+        if a == b:
+            p.add("Learner records", label, show(a), show(b), SAME,
+                  "Compared as totals: grade records, attempts and SCORM records.")
+        elif now == b:
+            p.add("Learner records", label, show(a), show(b), EXPECTED,
+                  "Matches the Original now: learners' access changed after the pre-scan.")
+        else:
+            off = "; ".join(f"{name} {a[k]} to {b[k]}" for k, name in _INACTIVE if a[k] != b[k])
+            p.add("Learner records", label, show(a), show(b), DIFFERENT,
+                  f"Totals differ: {off}. To see whose, scan the Original again with every learner "
+                  "(pre --all-learners) and post-scan against that.")
+
+
 def check_hidden_columns(p: Pair):
     """Grade columns hidden in the Original that are visible in Ultra (S4 through M2)."""
     if not (p.both("S4") and "M2" in p.ran_post):
@@ -507,7 +545,7 @@ def check_hidden_columns(p: Pair):
 CHECKS = (check_copy_task, check_members, check_content_counts, check_content_types, check_availability,
           check_grade_columns, check_groups, check_release_conditions, check_partial_credit,
           check_question_sources, check_question_types, check_test_exceptions, check_work_in_progress,
-          check_learner_records, check_scorm, check_hidden_columns)
+          check_learner_records, check_scorm, check_inactive_records, check_hidden_columns)
 
 
 def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_post: set,

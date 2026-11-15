@@ -21,7 +21,7 @@
 | Available to learners now | No |
 | Members | 4 (1 staff, 3 students) |
 | Students in progress | 2 (2 active in the last 30 days, 0 not for 90 days or more, 0 never accessed) |
-| Students completed | 1 |
+| Students completed or expired | 1 (unavailable: copied, and counted rather than read one by one) |
 | Disabled students | 0 (copied too) |
 | Content | 10 items: 2 tests, 0 assignments, 1 SCORM, 1 discussion links, 0 LTI links |
 | Gated items | 2 |
@@ -64,4 +64,5 @@ These site-wide settings decide how the course converts. Agree them before the f
 - Links inside SCORM packages and Content Collection pages that point to the Original course.
 - Whether files linked from the Content Collection still exist.
 - Systems outside the LMS that store course or grade column IDs (give them the ID map from the hand-off report).
+- Each record of students who are unavailable or disabled: the scan counts their grades, attempts and SCORM records instead of reading them one by one.
 - SCORM packages with a time limit (S6 was not run).

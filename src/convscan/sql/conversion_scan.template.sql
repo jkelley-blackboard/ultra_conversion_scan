@@ -96,7 +96,8 @@ order by s.course_id;
 
 -- ===========================================================================
 -- S2. Members: every role, and students in progress, completed and disabled, with last
---     access. Disabled enrollments (row_status 2) are counted separately. Copy and convert
+--     access. An unavailable membership (available_ind 'N') means the learner has completed
+--     or their access has expired; 'completed' below counts both. Disabled enrollments (row_status 2) are counted separately. Copy and convert
 --     KEEPS disabled members (observed 2026-11-13), so the copy load is members plus
 --     students_disabled (plus any disabled staff). Left join, so a course with no members
 --     still returns a row of zeros.
@@ -119,6 +120,49 @@ from scope s
 left join course_users cu on cu.crsmain_pk1 = s.crs_pk
 group by s.course_id
 order by members desc;
+
+-- S2b. Totals for the students the per-learner queries leave out. By default S7, S8b and S10
+--      read only enabled, available students (in progress). Unavailable students (completed, or
+--      access ended) and disabled students are copied too, so their records are totalled here
+--      and the hand-off compares the totals without reading anyone's grades or SCORM state.
+--      One row per course and state ('unavailable' or 'disabled'), only where there are any.
+--      Grade rows exclude calculated and deleted columns, as in S7.
+with scope as ({SCOPE}),
+m as (
+  select s.course_id, s.crs_pk, cu.pk1 as cu_pk, cu.users_pk1,
+         case when cu.row_status <> 0 then 'disabled' else 'unavailable' end as state
+  from scope s
+  join course_users cu on cu.crsmain_pk1 = s.crs_pk and cu.role = 'S'
+                      and (cu.row_status <> 0 or cu.available_ind = 'N')),
+g as (
+  select m.cu_pk, count(distinct gg.pk1) as grade_rows, count(a.pk1) as attempts,
+         count(a.pk1) filter (where a.status in (3, 4, 8)) as open,
+         count(a.pk1) filter (where a.status in (6, 9))    as needs_grading
+  from m
+  join gradebook_grade gg on gg.course_users_pk1 = m.cu_pk
+  join gradebook_main gm  on gm.pk1 = gg.gradebook_main_pk1 and coalesce(gm.calculated_ind, 'N') = 'N'
+                         and coalesce(gm.deleted_ind, 'N') = 'N'
+  left join attempt a     on a.gradebook_grade_pk1 = gg.pk1
+  group by m.cu_pk),
+sc as (
+  select m.cu_pk, count(*) as scorm_registrations
+  from m
+  join course_contents cc  on cc.crsmain_pk1 = m.crs_pk and cc.cnthndlr_handle = 'resource/x-plugin-scormengine'
+  join scormpackage p      on p.api_course_id = '_' || cc.pk1 || '_1'
+  join scormregistration r on r.scorm_package_id = p.scorm_package_id
+                          and split_part(r.api_registration_id, '-', 2) = '_' || m.users_pk1 || '_1'
+  group by m.cu_pk)
+select m.course_id, m.state, count(*) as learners,
+  coalesce(sum(g.grade_rows), 0)           as grade_rows,
+  coalesce(sum(g.attempts), 0)             as attempts,
+  coalesce(sum(g.open), 0)                 as open,
+  coalesce(sum(g.needs_grading), 0)        as needs_grading,
+  coalesce(sum(sc.scorm_registrations), 0) as scorm_registrations
+from m
+left join g  on g.cu_pk = m.cu_pk
+left join sc on sc.cu_pk = m.cu_pk
+group by m.course_id, m.state
+order by m.course_id, m.state;
 
 
 -- ===========================================================================
@@ -507,9 +551,11 @@ order by s.course_id, cc.pk1;
 
 
 -- ===========================================================================
--- S7. Per-learner baseline: one row per student per gradable column
---     (the core of the compare; completed learners included because they copy too).
---     Deleted and calculated columns are excluded.
+-- S7. Per-learner baseline: one row per student per gradable column (the core of the compare).
+--     Deleted and calculated columns are excluded. The learner filter (the LEARNERS placeholder,
+--     filled in by convscan) narrows the students: by default
+--     to those available (in progress), with the rest totalled in S2b; empty for every enabled
+--     student (--all-learners); on a post-scan, the learners its baseline read.
 -- ===========================================================================
 with scope as ({SCOPE}),
 att as (
@@ -531,7 +577,7 @@ select s.course_id, cu.users_pk1, cu.pk1 as cu_pk, cu.available_ind as learner_a
   coalesce(att.open, 0) as open, coalesce(att.needs_grading, 0) as needs_grading,
   gg.last_attempt_date
 from scope s
-join course_users cu    on cu.crsmain_pk1 = s.crs_pk and cu.role = 'S' and cu.row_status = 0
+join course_users cu    on cu.crsmain_pk1 = s.crs_pk and cu.role = 'S' and cu.row_status = 0 {LEARNERS}
 join gradebook_main gm  on gm.crsmain_pk1 = s.crs_pk and coalesce(gm.calculated_ind, 'N') = 'N'
                        and coalesce(gm.deleted_ind, 'N') = 'N'
 join gradebook_grade gg on gg.gradebook_main_pk1 = gm.pk1 and gg.course_users_pk1 = cu.pk1
@@ -552,13 +598,14 @@ from scope s
 join groups g on g.crsmain_pk1 = s.crs_pk
 order by s.course_id, g.group_name;
 
--- S8b. Per-learner group membership (users_pk1 and group name; names match across a copy)
+-- S8b. Per-learner group membership (users_pk1 and group name; names match across a copy).
+--      Same learner filter as S7.
 with scope as ({SCOPE})
 select s.course_id, cu.users_pk1, g.group_name
 from scope s
 join groups g        on g.crsmain_pk1 = s.crs_pk
 join group_users gu  on gu.groups_pk1 = g.pk1
-join course_users cu on cu.pk1 = gu.course_users_pk1 and cu.row_status = 0
+join course_users cu on cu.pk1 = gu.course_users_pk1 and cu.row_status = 0 {LEARNERS}
 order by s.course_id, g.group_name, cu.users_pk1;
 
 
@@ -604,7 +651,7 @@ order by s.course_id, cc.title, ar.title, ac.crit_type;
 --      decodes it while reading and writes only a fingerprint (blob_md5) and the bookmarks.
 --      Run through another tool, drop the runtime_data column if it can't decode it.
 --      Learners are matched by users_pk1 taken from api_registration_id
---      ('<content_id>-<user_id>').
+--      ('<content_id>-<user_id>'). Same learner filter as S7.
 -- ===========================================================================
 with scope as ({SCOPE}),
 pkg as (
@@ -638,7 +685,7 @@ select reg.course_id, cu.users_pk1, cu.available_ind as learner_available, reg.c
   reg.runtime_data           -- convscan decodes this and keeps only a fingerprint (blob_md5)
 from reg
 join course_users cu on cu.crsmain_pk1 = reg.crs_pk and '_' || cu.users_pk1 || '_1' = reg.user_ext
-                    and cu.role = 'S' and cu.row_status = 0
+                    and cu.role = 'S' and cu.row_status = 0 {LEARNERS}
 left join rt on rt.scorm_registration_id = reg.scorm_registration_id
 order by reg.course_id, cu.users_pk1, reg.content_pk, reg.instance_id;
 

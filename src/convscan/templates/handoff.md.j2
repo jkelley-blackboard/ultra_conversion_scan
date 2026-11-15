@@ -68,3 +68,6 @@ Grade columns by match: {% for k, v in map_counts | dictsort %}{{ k }} {{ v }}{{
 - What a learner sees on screen, and whether SCORM content resumes in the player.
 - Whether files linked from the Content Collection still open.
 - Systems outside the LMS that store course or grade column IDs: update them from the ID map.
+{% if run.get("learners") == "active" %}
+- Each record of students who were unavailable or disabled at the pre-scan: their records are compared as totals, not one by one.
+{% endif %}

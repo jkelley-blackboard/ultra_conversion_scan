@@ -309,6 +309,17 @@ rules:
     action: Agree who grades them, and whether before the freeze or in Ultra.
     decision: true
 
+  - id: inactive_waiting_for_grading
+    title: Work waiting to be graded from students who can't open the course
+    source: S2b
+    where: {needs_grading__gt: 0}
+    measure: sum(needs_grading)
+    severity: 0
+    known: true
+    says: "{value} submission(s) from unavailable or disabled students are waiting for a grader. They carry over and can be graded in Ultra."
+    action: Agree who grades them, and whether before the freeze or in Ultra.
+    decision: true
+
   - id: content_type_untested
     title: Content types not yet covered by conversion testing
     source: S3c

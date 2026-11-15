@@ -24,6 +24,13 @@ def _skip(a, cfg) -> set[str]:
     return kit.LEARNER if (a.no_learner or not cfg["learner_queries"]) else set()
 
 
+def _learners(a) -> tuple[str, str]:
+    """(SQL filter, name recorded in run.json) for a pre-scan or the sql command."""
+    if getattr(a, "all_learners", False):
+        return kit.ALL_LEARNERS, "all"
+    return kit.ACTIVE_LEARNERS, "active"
+
+
 def _new_out(name: str, cfg) -> tuple[pathlib.Path, pathlib.Path]:
     """Create a run's data and reports folders. Never overwrites a run or shared reports."""
     run_dir, reports_dir = paths.resolve(name, cfg)
@@ -56,12 +63,15 @@ def cmd_check(a, cfg):
 
 def cmd_pre(a, cfg):
     scope = _scope(a, cfg)
-    stmts = kit.statements(kit.load_template(), scope.originals_sql(), scope.suffix, skip=_skip(a, cfg) | {"S0"})
+    filt, learners = _learners(a)
+    stmts = kit.statements(kit.load_template(), scope.originals_sql(), scope.suffix, skip=_skip(a, cfg) | {"S0"},
+                           learners=filt)
     runner = DdaRunner(cfg["statement_timeout_s"], cfg["db"])
     out, reports_dir = _new_out(a.out, cfg)
-    print(f"pre-scan, {scope.describe()}, {len(stmts)} queries -> {out}")
+    print(f"pre-scan, {scope.describe()}, {len(stmts)} queries, learners: {learners} -> {out}")
     run_kit(runner, stmts, out, {"mode": "pre", "name": out.name, "scope": scope.describe(),
-                                 "suffix": scope.suffix, "pairs": scope.pairs, "reports_dir": str(reports_dir)})
+                                 "suffix": scope.suffix, "pairs": scope.pairs, "learners": learners,
+                                 "reports_dir": str(reports_dir)})
     runner.close()
     _render(out, cfg)
 
@@ -85,17 +95,19 @@ def cmd_post(a, cfg):
         raise SystemExit(f"the reporting database is more than {cfg['max_replica_lag_s']} s behind; "
                          "wait and try again (or pass --ignore-lag)")
     out, reports_dir = _new_out(a.out, cfg)
+    # The same learners the baseline read, whatever their state now.
+    filt, learners = kit.learner_filter(base_run, base, pairs), base_run.get("learners", "all")
     stmts = kit.statements(kit.load_template(), scope.copies_sql(), scope.suffix, pairs_sql=scope.pairs_sql(),
-                           skip=_skip(a, cfg) | {"S0"})
+                           skip=_skip(a, cfg) | {"S0"}, learners=filt)
     # The Originals as they are now: learners keep working after the pre-scan, so the compare
     # accepts a copy value that matches either the baseline or the Original now.
     stmts += [(f"{label}_now", sql) for label, sql in
               kit.statements(kit.load_template(), scope.originals_sql(), scope.suffix,
-                             only=kit.NOW, skip=_skip(a, cfg))]
-    print(f"post-scan, {scope.describe()}, {len(stmts)} queries -> {out}")
+                             only=kit.NOW, skip=_skip(a, cfg), learners=filt)]
+    print(f"post-scan, {scope.describe()}, {len(stmts)} queries, learners: as the baseline ({learners}) -> {out}")
     run_kit(runner, stmts, out, {"mode": "post", "name": out.name, "scope": scope.describe(),
                                  "suffix": scope.suffix, "pairs": pairs, "baseline": str(base_dir.resolve()),
-                                 "replica_lag": lag, "reports_dir": str(reports_dir)})
+                                 "learners": learners, "replica_lag": lag, "reports_dir": str(reports_dir)})
     runner.close()
     _render(out, cfg)
 
@@ -172,11 +184,13 @@ def cmd_tasks(a, cfg):
 
 def cmd_sql(a, cfg):
     scope = _scope(a, cfg)
+    filt = _learners(a)[0]
     if a.scope == "original":
-        stmts = kit.statements(kit.load_template(), scope.originals_sql(), scope.suffix, skip=_skip(a, cfg))
+        stmts = kit.statements(kit.load_template(), scope.originals_sql(), scope.suffix, skip=_skip(a, cfg),
+                               learners=filt)
     else:
         stmts = kit.statements(kit.load_template(), scope.copies_sql(), scope.suffix,
-                               pairs_sql=scope.pairs_sql(), skip=_skip(a, cfg))
+                               pairs_sql=scope.pairs_sql(), skip=_skip(a, cfg), learners=filt)
     sys.stdout.write(kit.as_script(stmts))
 
 
@@ -221,8 +235,11 @@ def main(argv=None):
     sp.add_argument("path", nargs="?", help="where to write it (default ~/convscan/config.yaml)")
     sp.set_defaults(fn=cmd_init)
     sub.add_parser("check", help="test the connection, the schema (S0) and the replica lag").set_defaults(fn=cmd_check)
+    all_learners = ("read every enabled student's records one by one, not only students in progress "
+                    "(unavailable and disabled students are otherwise only totalled)")
     sp = sub.add_parser("pre", help="pre-scan the Originals and write pre-conversion reports")
     scoped(sp)
+    sp.add_argument("--all-learners", action="store_true", help=all_learners)
     sp.add_argument("--out", required=True,
                     help="run name (data under data_dir, reports under reports_dir), or a folder path")
     sp.set_defaults(fn=cmd_pre)
@@ -246,6 +263,7 @@ def main(argv=None):
     sp = sub.add_parser("sql", help="print the expanded SQL for one scope")
     scoped(sp)
     sp.add_argument("--scope", choices=["original", "copy"], default="original")
+    sp.add_argument("--all-learners", action="store_true", help=all_learners)
     sp.set_defaults(fn=cmd_sql)
 
     a = p.parse_args(argv)

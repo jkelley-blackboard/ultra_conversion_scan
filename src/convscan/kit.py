@@ -12,7 +12,35 @@ TEMPLATE = PACKAGE / "sql" / "conversion_scan.template.sql"
 LEARNER = {"S7", "S8b", "S10", "S12b"}
 
 # Re-read from the Originals during the post-scan, saved as <label>_now.
-NOW = {"S2", "S7", "S10"}
+NOW = {"S2", "S2b", "S7", "S10"}
+
+# The {LEARNERS} filter in S7, S8b and S10. By default only students in progress (available) are read
+# one by one; unavailable and disabled students are totalled in S2b. ALL_LEARNERS reads every enabled
+# student (pre --all-learners).
+ACTIVE_LEARNERS = "and cu.available_ind = 'Y'"
+ALL_LEARNERS = ""
+
+
+def learner_filter(run: dict, data: dict, pairs: list) -> str:
+    """The post-scan's filter: in each course, the learners its baseline read, not their state now.
+
+    A learner whose access ends (or is extended) between the scans is still compared. Each pair's
+    Original and copy get the Original's learners, course by course, so a learner in progress in one
+    course of the batch isn't read in another where they're inactive. A baseline made before the
+    default changed, or with --all-learners, read everyone, so the post-scan does too.
+    """
+    if run.get("learners", "all") == "all":
+        return ALL_LEARNERS
+    copies = {}
+    for o, n in pairs:
+        copies.setdefault(o, set()).update({o, n})
+    rows = sorted({(cid, int(r["users_pk1"])) for label in ("S7", "S8b", "S10") for r in data.get(label, [])
+                   if r.get("users_pk1") not in (None, "") for cid in copies.get(r["course_id"], ())})
+    if not rows:
+        return "and false"
+    values = ", ".join("('" + c.replace("'", "''") + f"', {u})" for c, u in rows)
+    return ("and (cu.crsmain_pk1, cu.users_pk1) in (select lf_cm.pk1, lf.u from (values " + values
+            + ") as lf(c, u) join course_main lf_cm on lf_cm.course_id = lf.c)")
 
 _LABEL = re.compile(r"^-- ((?:S|M)\d+[a-z]?)\.", re.M)
 _COMMENT_ONLY = re.compile(r"^\s*(--.*)?$")
@@ -23,7 +51,8 @@ def load_template(path: pathlib.Path | None = None) -> str:
 
 
 def statements(template: str, scope_sql: str, suffix: str, pairs_sql: str | None = None,
-               only: set[str] | None = None, skip: set[str] | None = None) -> list[tuple[str, str]]:
+               only: set[str] | None = None, skip: set[str] | None = None,
+               learners: str = ACTIVE_LEARNERS) -> list[tuple[str, str]]:
     """Return [(label, sql)] in template order.
 
     Statements are separated by a semicolon at the end of a line (comment lines in the template
@@ -42,7 +71,7 @@ def statements(template: str, scope_sql: str, suffix: str, pairs_sql: str | None
             if pairs_sql is None:
                 continue
             chunk = chunk.replace("{PAIRS}", pairs_sql)
-        out.append((label, chunk.replace("{SCOPE}", scope_sql).strip()))
+        out.append((label, chunk.replace("{LEARNERS}", learners).replace("{SCOPE}", scope_sql).strip()))
     return out
 
 

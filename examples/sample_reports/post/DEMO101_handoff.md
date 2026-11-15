@@ -10,7 +10,7 @@
 |---|---|
 | Course | DEMO101 → **DEMO101-7777** (Ultra) |
 | Learners | 4 members, 2 in progress |
-| Checks | 20 same, 3 expected changes, 0 different, 4 need action, 0 not checked |
+| Checks | 21 same, 3 expected changes, 0 different, 4 need action, 0 not checked |
 | Status | **4 item(s) need action before release** |
 
 ## Needs action before release
@@ -28,7 +28,7 @@
 | Members | Active members | 4 | 4 | Same |  |
 | Members | Students | 3 | 3 | Same |  |
 | Members | Students in progress | 2 | 2 | Same |  |
-| Members | Students completed | 1 | 1 | Same |  |
+| Members | Students completed or expired | 1 | 1 | Same |  |
 | Members | Disabled students | 0 | 0 | Same |  |
 | Content | Tests and assignments | 2 | 2 | Same |  |
 | Content | SCORM items | 1 | 1 | Same |  |
@@ -48,8 +48,9 @@
 | Tests | Test exceptions | 0 | 0 | Same |  |
 | Learner records | Attempts in progress | 1 | 1 | Same | Original: 1 tests. Ultra: 1 tests. |
 | Learner records | Submissions waiting for grading | 0 | 0 | Same |  |
-| Learner records | Grade and attempt records matching | 9 | 9 | Same |  |
-| SCORM | SCORM records with the same resume state | 3 | 3 | Same | Bookmark, suspend data, status and score compared (3 from the engine's runtime record).  |
+| Learner records | Grade and attempt records matching | 6 | 6 | Same |  |
+| SCORM | SCORM records with the same resume state | 2 | 2 | Same | Bookmark, suspend data, status and score compared (2 from the engine's runtime record).  |
+| Learner records | Unavailable students' records | 1 learner(s), 4 record(s) | 1 learner(s), 4 record(s) | Same | Compared as totals: grade records, attempts and SCORM records. |
 | Grades | Hidden columns now visible | 1 | 1 | Needs action | Decide whether to hide, remove or keep: Placement Test |
 
 ## ID map
@@ -81,3 +82,4 @@ Grade columns by match: matched 4, removed in Ultra (weighted total) 1. An ambig
 - What a learner sees on screen, and whether SCORM content resumes in the player.
 - Whether files linked from the Content Collection still open.
 - Systems outside the LMS that store course or grade column IDs: update them from the ID map.
+- Each record of students who were unavailable or disabled at the pre-scan: their records are compared as totals, not one by one.

@@ -14,7 +14,9 @@ import json
 import pathlib
 
 PAIRS = [("DEMO101", "DEMO101-7777"), ("DEMO102", "DEMO102-7777")]
-LEARNERS = (5001, 5002, 5003)
+# Students in progress, read one by one. Each course also has one completed (unavailable) student,
+# 5003, whose records are only totalled (S2b): the default since 2026-11-15.
+LEARNERS = (5001, 5002)
 
 SETTINGS = [
     {"registry_key": "course.structure.max_level_of_nesting", "registry_value": "3"},
@@ -41,6 +43,10 @@ def _side(copy: bool) -> dict[str, list[dict]]:
                _course(c2, pk + 2, "Ethics in Practice", "DEMO102-7777")]
     d["S2"] = [{"course_id": c, "members": 4, "staff": 1, "students": 3, "in_progress": 2, "completed": 1,
                 "students_disabled": 0, "ip_lt30d": 2, "ip_gt90d": 0, "ip_never": 0} for c in (c1, c2)]
+    d["S2b"] = [{"course_id": c1, "state": "unavailable", "learners": 1, "grade_rows": 3, "attempts": 3,
+                 "open": 0, "needs_grading": 0, "scorm_registrations": 1},
+                {"course_id": c2, "state": "unavailable", "learners": 1, "grade_rows": 2, "attempts": 2,
+                 "open": 0, "needs_grading": 0, "scorm_registrations": 0}]
     d["S3"] = [
         {"course_id": c1, "items": 14 if copy else 10, "scorm": 1, "tests": 2, "assignments": 0, "forum_links": 1,
          "lti_items": 0, "items_unavailable": 1, "cc_references": 0, "cc_html_pages": 0, "dated_items": 0},
@@ -196,7 +202,8 @@ def _write(folder: pathlib.Path, data: dict[str, list[dict]], meta: dict):
 def write_runs(folder) -> tuple[pathlib.Path, pathlib.Path]:
     folder = pathlib.Path(folder)
     pre, post = folder / "sample_pre", folder / "sample_post"
-    common = {"scope": "manifest (2 courses)", "suffix": "-7777", "pairs": [list(p) for p in PAIRS]}
+    common = {"scope": "manifest (2 courses)", "suffix": "-7777", "pairs": [list(p) for p in PAIRS],
+              "learners": "active"}
     _write(pre, _side(copy=False), {**common, "mode": "pre", "name": "sample_pre", "finished": "2026-11-30T08:00:00"})
     _write(post, _side(copy=True), {**common, "mode": "post", "name": "sample_post",
                                     "finished": "2026-12-01T10:00:00", "baseline": str(pre.resolve())})
