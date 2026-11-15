@@ -207,10 +207,11 @@ new name such as `batch01_freeze`. That baseline is as close as possible to what
 name as `--baseline` in step 4.
 
 The pre-scan reads each learner's grades, attempts and SCORM progress only for students in progress.
-For unavailable and disabled students it saves totals per course. To read everyone's records one by
-one, add `--all-learners`. Do this for one sample course per course pattern, to confirm once that
-unavailable students' records carry over exactly. It's also worth doing where learners can have their
-access extended after the conversion. The post-scan always reads the same learners its baseline read.
+For unavailable and disabled students it saves totals per course. The conversion copies every
+membership the same way, so the learners in progress show whether records carry over, and the totals
+catch anything lost for the rest. If the hand-off shows a difference in those totals, scan the Original
+again with `--all-learners` to see whose records are affected. The post-scan always reads the same
+learners its baseline read.
 
 ### 3. Run the copy and convert, and watch it
 

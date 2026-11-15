@@ -122,8 +122,8 @@ group by s.course_id
 order by members desc;
 
 -- S2b. Totals for the students the per-learner queries leave out. By default S7, S8b and S10
---      read only enabled, available students (in progress). Unavailable students (completed, or
---      access ended) and disabled students are copied too, so their records are totalled here
+--      read only enabled, available students (in progress). Unavailable students (completed or
+--      expired) and disabled students are copied the same way, so their records are totalled here
 --      and the hand-off compares the totals without reading anyone's grades or SCORM state.
 --      One row per course and state ('unavailable' or 'disabled'), only where there are any.
 --      Grade rows exclude calculated and deleted columns, as in S7.
