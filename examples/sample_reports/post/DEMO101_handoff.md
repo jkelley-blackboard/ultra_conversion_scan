@@ -10,7 +10,7 @@
 |---|---|
 | Course | DEMO101 → **DEMO101-7777** (Ultra) |
 | Learners | 4 members, 2 in progress |
-| Checks | 20 same, 2 expected changes, 0 different, 4 need action, 0 not checked |
+| Checks | 20 same, 3 expected changes, 0 different, 4 need action, 0 not checked |
 | Status | **4 item(s) need action before release** |
 
 ## Needs action before release
@@ -42,7 +42,8 @@
 | Release conditions | Gated items still gated | 2 | 2 | Same |  |
 | Release conditions | Conditions carried over exactly | 2 | 1 | Needs action | 1 lost only their group(s), on: Advanced Readings. The group repair should restore these. |
 | Tests | Questions with partial-credit answer values | 1 | 0 | Needs action | 1 question(s) lost their answer values: run the partial-credit repair, then re-scan. |
-| Tests | Questions drawn through random blocks and question sets | 0 | 0 | Same |  |
+| Tests | Questions drawn through random blocks and question sets | 5 | 5 | Same |  |
+| Tests | Pools and question banks | 0 | 1 | Expected | Undeployed tests became question banks (a site setting, listed below). |
 | Tests | Questions in tests | 6 | 6 | Same | 6 Multiple Choice question(s) are stored as Multiple Answer in Ultra (single answer). |
 | Tests | Test exceptions | 0 | 0 | Same |  |
 | Learner records | Attempts in progress | 1 | 1 | Same | Original: 1 tests. Ultra: 1 tests. |
@@ -73,7 +74,7 @@ Grade columns by match: matched 4, removed in Ultra (weighted total) 1. An ambig
 | Levels of nested content (3 by default, 4 with the additional level) | 3 |
 | Content areas become learning modules | Yes |
 | Folder and learning module descriptions become documents | No |
-| Undeployed tests become question banks | No |
+| Undeployed tests become question banks | Yes |
 
 ## Not checked by this scan
 

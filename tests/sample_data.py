@@ -1,7 +1,8 @@
 """Invented scan data for two courses, used by the offline test and to build examples/.
 
 DEMO101 has the known losses: a group that gates content, a partial-credit question, a hidden grade
-column that becomes visible, and an open test attempt. DEMO102 is clean. Their copies are
+column that becomes visible, and an open test attempt. It also has a folder nested too deep for Ultra
+and a quiz that draws from an undeployed test, which becomes a question bank. DEMO102 is clean. Their copies are
 DEMO101-7777 and DEMO102-7777. No real course, learner or site data.
 
     write_runs(folder) -> (pre_folder, post_folder)
@@ -19,7 +20,7 @@ SETTINGS = [
     {"registry_key": "course.structure.max_level_of_nesting", "registry_value": "3"},
     {"registry_key": "ultraui.converting.content.areas.to.learning.modules", "registry_value": "true"},
     {"registry_key": "ultraui.converting.folder.and.learning.module.descriptions.to.documents", "registry_value": "false"},
-    {"registry_key": "ultraui.converting.undeployed.tests.to.question.banks", "registry_value": "false"},
+    {"registry_key": "ultraui.converting.undeployed.tests.to.question.banks", "registry_value": "true"},
 ]
 
 
@@ -105,8 +106,20 @@ def _side(copy: bool) -> dict[str, list[dict]]:
                  "questions": 1},
                 {"course_id": c2, "test_title": "Final Test", "question_type_code": 7, "question_type": "Essay",
                  "removed_by_conversion": "false", "questions": 2}]
-    d["S5e"] = [{"course_id": c1, "tests": 2, "pools_and_banks": 0, "other_assessments": 0, "block_draws": 0},
+    # Original only: Ultra copies have no Original folder depth to check.
+    d["S3d"] = [] if copy else [
+        {"course_id": c1, "content_pk": pk * 100 + 7, "cnthndlr_handle": "resource/x-bb-folder",
+         "title": "Further Reading", "path": "Course Content / Unit 1 / Week 1 / Further Reading",
+         "ultra_level": 4, "max_level": 3}]
+
+    # The undeployed "Question Pool" test becomes a question bank in the copy; the quiz still draws 5.
+    d["S5e"] = [{"course_id": c1, "tests": 2 if copy else 3, "pools_and_banks": 1 if copy else 0,
+                 "other_assessments": 0, "block_draws": 5},
                 {"course_id": c2, "tests": 1, "pools_and_banks": 0, "other_assessments": 0, "block_draws": 0}]
+    d["S5f"] = [] if copy else [
+        {"course_id": c1, "asmt_pk": pk * 100 + 50, "test_title": "Question Pool", "questions": 12,
+         "drawing_tests": 1, "draws": 5, "drawing_test_titles": "Module 1 Quiz", "bank_setting": "true",
+         "becomes_bank": "true"}]
 
     d["S7"] = []
     for c, cols in ((c1, (2, 3, 6)), (c2, (12, 13))):

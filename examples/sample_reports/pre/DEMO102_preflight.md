@@ -46,7 +46,7 @@ These site-wide settings decide how the course converts. Agree them before the f
 | Levels of nested content (3 by default, 4 with the additional level) | 3 |
 | Content areas become learning modules | Yes |
 | Folder and learning module descriptions become documents | No |
-| Undeployed tests become question banks | No |
+| Undeployed tests become question banks | Yes |
 
 ## Not checked by this scan
 

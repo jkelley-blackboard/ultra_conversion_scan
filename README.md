@@ -86,11 +86,13 @@ a row per learner and are the large ones.
 | S3 | Content counts: tests, assignments, SCORM, discussions, LTI, hidden and dated items, Content Collection links |
 | S3c | Every content type in the course, with how many items of each are hidden |
 | S3b | Every item with its folder path, availability and depth |
+| S3d | Folders and learning modules deeper than the site's nesting limit in Ultra (Original courses only) |
 | S4 | Grade columns: type, attached item, visibility, calculated or not |
 | S5b | Questions with partial credit per course, by how their tests are used (route learners, open the next step, or just graded) |
 | S5c | Each partial-credit question's answer values: the repair list and its baseline |
 | S5d | Question types in every test, including those Ultra removes |
 | S5e | Pools, question banks, and questions drawn into tests by random blocks |
+| S5f | Undeployed tests, how many questions other tests draw from each, and whether the site turns them into question banks |
 | S6 | SCORM package settings |
 | S7 | Per learner: grades and attempts on every column (open, submitted, waiting for grading) |
 | S8, S8b | Groups and what uses them; per learner: group membership |
@@ -210,8 +212,12 @@ listed in USER_GUIDE.md and in each report's "Not checked" section.
 - After the partial-credit repair, compare each question's answer values with the baseline, not just
   the count. The repair has to handle Multiple Choice stored as Multiple Answer.
 - Calculated column values could be compared through the REST gradebook API.
-- Two cheap rules to add: items deeper than the site's nesting limit (S3b has depth, S14 the limit),
-  and undeployed tests that other tests draw from, when they'd become question banks.
+- The nesting rule (S3d, added 2026-11-15) counts an Original content area as level 1 in Ultra, read
+  from how demo stores Ultra courses. Confirm it on a conversion: `FL3906_orig` on demo has two folders
+  at level 4.
+- The undeployed-test rule (S5f, added 2026-11-15) relies on Blackboard's help for what the question
+  bank loses. A test conversion of a course where a test draws from an undeployed test (on demo:
+  `CBU_BUS_535`) would show whether the draws survive.
 - Not scanned yet: text grade schemas (Ultra converts them to points) and course menu items (Ultra
   has no course menu).
 - Rules that haven't yet fired on real data: test exceptions, open assignment drafts, timed attempts

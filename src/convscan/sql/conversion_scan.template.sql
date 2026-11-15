@@ -63,7 +63,8 @@ with need(t, c) as (values
  ('qti_asi_data','bbmd_asi_type'),('qti_asi_data','bbmd_assessmenttype'),('qti_asi_data','bbmd_partialcredit'),
  ('qti_block_mapping','question_block_pk1'),('qti_block_mapping','question_pk1'),
  ('course_assessment','time_limit'),('course_assessment','timer_completion'),('course_assessment','proctoring_service_handle'),
- ('course_assessment','req_secure_browser_take_ind'),('user_test_option','course_users_pk1'),('user_test_option','groups_pk1'),
+ ('course_assessment','req_secure_browser_take_ind'),('course_assessment','qti_asi_data_pk1'),
+ ('system_registry','registry_key'),('system_registry','registry_value'),('user_test_option','course_users_pk1'),('user_test_option','groups_pk1'),
  ('scormpackage','api_course_id'),('scormregistration','api_registration_id'),('scormregistration','suspended_activity_id'),('scormregistration','runtime_data'),
  ('scormactivity','scorm_registration_id'),('scormactivityrt','location'),('scormactivityrt','suspend_data'),
  ('scormbbpackageinfo','max_attempts'),('scormpackageproperties','time_limit'),
@@ -174,6 +175,33 @@ select t.course_id, t.pk1 as content_pk, t.cnthndlr_handle, t.title, t.available
   p.title as parent_title, t.web_url
 from tree t
 left join course_contents p on p.pk1 = t.parent_pk1
+order by t.course_id, t.path;
+
+-- S3d. Folders and learning modules deeper than the site's nesting limit (S14, 3 if unset), in
+--      Original courses only. A content area becomes a top-level item in Ultra (level 1), so a
+--      container at depth d in the Original lands at level d + 1: on demo, Ultra courses hold
+--      their top-level folders at depth 1 under a hidden root. Conversion moves deeper containers
+--      up to fit (September sample), which changes the course's structure. One row per container.
+with recursive scope as ({SCOPE}),
+lim as (
+  select coalesce(max(case when r.registry_value ~ '^[0-9]+$' then r.registry_value::int end), 3) as max_level
+  from system_registry r
+  where r.registry_key = 'course.structure.max_level_of_nesting'),
+tree as (
+  select s.course_id, cc.pk1, cc.title, cc.cnthndlr_handle, cc.title::text as path, 0 as depth
+  from scope s
+  join course_main cm     on cm.pk1 = s.crs_pk and coalesce(cm.ultra_status, 'C') = 'C'
+  join course_contents cc on cc.crsmain_pk1 = s.crs_pk
+  where cc.parent_pk1 is null
+  union all
+  select t.course_id, c.pk1, c.title, c.cnthndlr_handle, t.path || ' / ' || c.title, t.depth + 1
+  from tree t join course_contents c on c.parent_pk1 = t.pk1)
+select t.course_id, t.pk1 as content_pk, t.cnthndlr_handle, t.title, t.path,
+  t.depth + 1 as ultra_level, l.max_level
+from tree t
+cross join lim l
+where t.cnthndlr_handle in ('resource/x-bb-folder', 'resource/x-bb-lesson')
+  and t.depth + 1 > l.max_level
 order by t.course_id, t.path;
 
 
@@ -417,6 +445,45 @@ from a
 left join draws d on d.course_id = a.course_id
 group by a.course_id
 order by a.course_id;
+
+-- S5f. Undeployed tests (a test with no course_assessment row: never added to the course), with
+--      how many other tests draw questions from each through random blocks and question sets.
+--      With the site setting that turns undeployed tests into question banks on (S14), Blackboard's
+--      help says the banks lose random blocks, question sets and linked questions, so the tests
+--      that draw from them may come up short. On demo 2026-11-15: 343 undeployed tests in Original
+--      courses, 4 of them drawn from. One row per undeployed test.
+with scope as ({SCOPE}),
+setting as (
+  select max(r.registry_value) as v
+  from system_registry r
+  where r.registry_key = 'ultraui.converting.undeployed.tests.to.question.banks'),
+undeployed as (
+  select s.course_id, x.pk1 as asmt_pk, x.title
+  from scope s
+  join qti_asi_data x on x.crsmain_pk1 = s.crs_pk and x.bbmd_asi_type = 1 and x.bbmd_assessmenttype = 1
+  where not exists (select 1 from course_assessment ca where ca.qti_asi_data_pk1 = x.pk1)),
+uq as (
+  select u.asmt_pk, q.pk1 as question_pk
+  from undeployed u
+  join qti_asi_data sec on sec.parent_pk1 = u.asmt_pk
+  join qti_asi_data q   on q.parent_pk1 = sec.pk1 and q.bbmd_asi_type = 3),
+drawn as (
+  select uq.asmt_pk, count(*) as draws, count(distinct dt.pk1) as drawing_tests,
+         string_agg(distinct dt.title, '; ') as drawing_test_titles
+  from uq
+  join qti_block_mapping m on m.question_pk1 = uq.question_pk
+  join qti_asi_data blk    on blk.pk1 = m.question_block_pk1
+  join qti_asi_data sec    on sec.pk1 = blk.parent_pk1
+  join qti_asi_data dt     on dt.pk1 = sec.parent_pk1 and dt.pk1 <> uq.asmt_pk
+  group by uq.asmt_pk)
+select u.course_id, u.asmt_pk, u.title as test_title,
+  (select count(*) from uq where uq.asmt_pk = u.asmt_pk) as questions,
+  coalesce(d.drawing_tests, 0) as drawing_tests, coalesce(d.draws, 0) as draws, d.drawing_test_titles,
+  st.v as bank_setting, coalesce(st.v = 'true', false) as becomes_bank
+from undeployed u
+cross join setting st
+left join drawn d on d.asmt_pk = u.asmt_pk
+order by u.course_id, u.title;
 
 
 -- ===========================================================================

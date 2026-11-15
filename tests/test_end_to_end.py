@@ -26,7 +26,9 @@ def test_preflight_flags_the_known_risks(tmp_path):
     pre, _ = _render(tmp_path)
     text = (pre / "DEMO101_preflight.md").read_text(encoding="utf-8")
     for expected in ("Release conditions that depend on groups", "Partial credit in tests that open the next step",
-                     "Test attempts open now", "Grade columns hidden from learners", "Site conversion settings"):
+                     "Test attempts open now", "Grade columns hidden from learners", "Site conversion settings",
+                     "Folders nested deeper than Ultra allows", "limit of 3 levels",
+                     "Tests that draw questions from an undeployed test", "by: Module 1 Quiz"):
         assert expected in text, expected
     clean = (pre / "DEMO102_preflight.md").read_text(encoding="utf-8")
     assert "No blocking items found" in clean
