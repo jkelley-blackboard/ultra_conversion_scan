@@ -1,0 +1,28 @@
+# Runs the offline test suite on every push and pull request. No database is needed:
+# the tests use invented data (tests/sample_data.py).
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest -q
+      - name: Sample reports match the code
+        run: |
+          python examples/build_examples.py
+          git diff --exit-code examples/sample_reports

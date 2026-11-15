@@ -4,8 +4,9 @@ runs/
 !examples/*.csv
 !examples/sample_reports/**/*.csv
 
-# Local config may name a site
+# Local config may name a site (convscan.yaml is the name convscan looks for in the current folder)
 config.yaml
+convscan.yaml
 .env
 
 __pycache__/
