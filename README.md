@@ -16,8 +16,18 @@ its schema, and the [DDA repository](https://github.com/jkelley-blackboard/DDA) 
 machine-readable schema (`schema.json`) and tools. Check a table or column there before adding it to a
 query.
 
-**Status (2026-11-14):** working, and tested on four real copy-and-convert runs on a demo site (2 to
-10 learners per course). Not yet run on a production site.
+**Before each LMS release,** check the schema changes against the tables and columns the queries use (the
+S0 list in the SQL file). Blackboard publishes the database documentation for every build, released or
+not, to [bbprepo](https://bbprepo.blackboard.com/#browse/browse:releases:bbdn%2Fschema). The DDA
+repository tracks Test/Stage releases and records each delta on its
+[Schema Changes](https://jkelley-blackboard.github.io/DDA/schema-changes.html) page (`tools/diff_schema.py`).
+If the next release isn't published yet, diff against the latest build on bbprepo for an interim list.
+After the release, run `convscan check` on the site.
+
+**Status (2026-11-15):** working, and tested on four real copy-and-convert runs on a demo site (2 to
+10 learners per course). Version 0.2.0 reads learner records one by one only for students in progress,
+and adds rules for over-deep folders and draws from undeployed tests; both changes were checked
+read-only on the demo site. Not yet run on a production site.
 
 **See it first:** [examples/sample_reports/](examples/sample_reports/) has a pre-conversion report,
 a hand-off report and an ID map for two invented courses, one with typical losses and one clean.
@@ -76,7 +86,8 @@ Three design choices:
 ## The queries
 
 Each query has a label, used in rules, run folders and these notes. Those marked "per learner" return
-a row per learner and are the large ones.
+a row per learner and are the large ones. S7, S8b and S10 read only students in progress by default
+(see "Which learners are read one by one" below).
 
 | Label | What it reads |
 |---|---|
@@ -180,7 +191,8 @@ counts only.
 | Reports, batch summary | `reports/` | Counts only. Titles of courses, items, columns and groups appear; group names are whatever the course author typed |
 | `idmap.csv` | `reports/` | Nothing: course and grade column IDs |
 | `run.json` | Run folder | Nothing: courses, settings, row counts, timings, replica lag |
-| S7, S8b, S10, S12b, and S9's named users | `data/*.csv` | One row per learner by internal key: grades, attempts, group, test exceptions, SCORM location |
+| S7, S8b, S10, S12b, and S9's named users | `data/*.csv` | One row per learner by internal key: grades, attempts, group, test exceptions, SCORM location. S7, S8b and S10 cover students in progress only, unless `--all-learners` |
+| S2b | `data/*.csv` | Totals per course for unavailable and disabled students: no one's records |
 | SCORM runtime state | Not saved | Decoded while reading and replaced by a fingerprint |
 | `diff_learner_records.csv` | `data/` | Internal key, column and the two values, for each mismatch |
 
@@ -243,7 +255,9 @@ listed in USER_GUIDE.md and in each report's "Not checked" section.
 
 **Scale** (held until production runs are closer). Most courses are small, but a course with
 thousands of learners and dozens of graded items (one test course had 8,500 learners and 37 items,
-about 315,000 learner rows) is read three times by a post-scan and held in memory. In order of payoff:
+about 315,000 learner rows) is read three times by a post-scan and held in memory. Reading only
+students in progress (2026-11-15) already cuts this wherever most learners have completed or expired.
+Next, in order of payoff:
 
 1. Compare one fingerprint per course and column (and per SCORM package), computed in the database;
    fetch learner rows only where fingerprints differ.
@@ -301,7 +315,7 @@ Run `python -m pytest` after any change. None of the tests need a database.
 | Add or reword a finding | Edit [rules/default.yaml](src/convscan/rules/default.yaml) (see "Writing rules"), then `convscan render` a saved run to see the result |
 | Teach the compare a new expected conversion behavior | Find the area's `check_*` function in [compare.py](src/convscan/compare.py) (the `CHECKS` list at the bottom gives the order). Title and type rules are near the top (`norm`, `_HANDLER`, `_RENAMED_BY_CONVERSION`); the column map's matching is in the M2 query |
 | Add a check to the hand-off | Write a `check_*` function that takes a `Pair` and calls `pair.add(...)`, and add it to `CHECKS` |
-| Add a query | Add it to the SQL file with a header line `-- S<n>. What it reads`, add its tables and columns to S0, add the label to `EXPECTED` in `tests/test_core.py`, and to the query table in this README. If it returns a row per learner, add it to `LEARNER` in `kit.py` |
+| Add a query | Add it to the SQL file with a header line `-- S<n>. What it reads`, add its tables and columns to S0, add the label to `EXPECTED` in `tests/test_core.py`, and to the query table in this README. If it returns a row per learner, add it to `LEARNER` in `kit.py`, and put `{LEARNERS}` on its `course_users cu` join so it reads the same learners as S7 |
 | Change what a report looks like | Edit the template in [templates/](src/convscan/templates/), then `convscan render` a saved run |
 | Refresh the examples | `python examples/build_examples.py`, and commit the result |
 

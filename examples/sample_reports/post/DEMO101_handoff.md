@@ -2,7 +2,7 @@
 
 **Prepared for:** Sample University | **Post-scan:** 2026-12-01 | **Baseline:** 2026-11-30 | **Batch:** sample_post
 
-> Generated from the LMS reporting database by convscan 0.1.0, by comparing the Ultra copy with the Original as scanned before conversion.
+> Generated from the LMS reporting database by convscan 0.2.0, by comparing the Ultra copy with the Original as scanned before conversion.
 
 ## Summary
 

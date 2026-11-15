@@ -31,8 +31,8 @@ Five ideas explain everything convscan does.
 **Two scans and a baseline.** A conversion copies each Original course and converts the copy to Ultra.
 convscan scans twice. The *pre-scan* reads the Original courses before the copy and reports what's
 likely to break. What it saves becomes the *baseline*. The *post-scan* reads the Ultra copies afterward
-and compares them with the baseline, item by item and learner by learner, to show what carried over and
-what didn't.
+and compares them with the baseline, item by item and, for learners in progress, learner by learner, to
+show what carried over and what didn't.
 
 **It only reads, from a copy of production.** DDA gives read-only access to a replica of the site's
 database: a copy that trails production by seconds or minutes. convscan opens a read-only session and
@@ -88,6 +88,12 @@ Paths use forward slashes, which work on Windows too.
 You need the site's DDA connection details and a read-only DDA user, which Blackboard provides with DDA
 access. New to DDA? The [DDA Resource Guide](https://jkelley-blackboard.github.io/DDA/) explains the
 service, how to connect, and the database schema.
+
+The data belongs to the institution, so get its written permission before you set up access or scan.
+Ask before a DDA user account is created for you, before your IP address is added to the site's DDA
+allow list (DDA accepts connections only from listed addresses), and before you extract any data. Say
+that the scans save learner-level records by internal key, kept on your computer and deleted at
+sign-off (see [Look after the data](#look-after-the-data)).
 
 1. Run `convscan init`. It asks for the host, port, database name, user and the institution's name, and
    writes them to `~/convscan/config.yaml` in your home folder. Leave anything you don't know blank and
@@ -264,8 +270,8 @@ has a `batch_summary.md` with one line per course, linking to each report.
 It reads top to bottom, from verdict to detail:
 
 1. **In short:** ready or not, the items that would block learners, and how many decisions are needed.
-2. **The course:** members, learners in progress and completed, content, gated items, grade columns,
-   groups.
+2. **The course:** members, learners in progress, completed or expired, and disabled, content, gated
+   items, grade columns, groups.
 3. **What could go wrong:** one row per risk, with how serious it is, whether it's a known conversion
    behavior, what the scan found, and what to do.
 4. **Decisions needed:** the risks the institution has to decide on.
@@ -396,6 +402,7 @@ Most problems show up at one of three moments: setting up, scanning, or reading 
 |---|---|---|
 | Many "Different" rows straight after a copy | The copies may not have finished replicating | Run `post` again under a new name |
 | "Not checked" on learner records | The scan ran with `--no-learner`, or a learner query failed | Rerun without `--no-learner` |
+| "Different" on unavailable or disabled students' records | Their totals differ between the Original and the copy | Scan the Original again with `pre --all-learners`, then `post` against that scan, to see whose records |
 | A course is missing from the reports | Its ID in the manifest doesn't exist on the site | Check the course ID |
 
 When you ask for help with a report, include `convscan --version` and the run's `run.json` (it holds no
@@ -474,6 +481,8 @@ read from the config file's folder.
 | Batch | The set of courses converted together |
 | Freeze | The moment an Original course is made unavailable and copied |
 | Baseline | The pre-scan's saved data, which the post-scan compares against |
+| In progress | A student whose membership is enabled and available: they can still open the course and resume |
+| Unavailable | A membership whose learner has completed, or whose access has expired. The copy keeps it; the scan counts its records |
 | Run | One scan, under a name, with a data folder and a reports folder |
 | Release condition | A rule that controls when learners see an item (for example, after a score on a test) |
 | Partial credit | Points for an answer that is partly right |
