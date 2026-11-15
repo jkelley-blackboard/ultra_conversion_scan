@@ -114,7 +114,7 @@ a row per learner and are the large ones. S7, S8b and S10 read only students in 
 | S12 | Test settings (time limit, auto-submit, attempts, passwords, proctoring) and open attempts |
 | S12b | Per learner or group: test exceptions (extra time or attempts) |
 | S13 | System tasks for each course (copy and convert, restore, follow-on tasks) |
-| S14 | The site's conversion settings |
+| S14 | The site's conversion settings, its LMS version and the release-condition inheritance flag |
 | M2 | The column map, Original to copy (post-scan only) |
 
 The header of the SQL file lists the code values these queries rely on, confirmed on a demo site.

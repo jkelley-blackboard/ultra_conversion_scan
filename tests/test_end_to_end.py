@@ -30,6 +30,8 @@ def test_preflight_flags_the_known_risks(tmp_path):
                      "Folders nested deeper than Ultra allows", "limit of 3 levels",
                      "Tests that draw questions from an undeployed test", "by: Module 1 Quiz"):
         assert expected in text, expected
+    assert "| Blackboard LMS version | 4001.7.0-rel.4+a1cda0a |" in text
+    assert "| Content takes the release conditions of its folder or learning module | Yes |" in text
     clean = (pre / "DEMO102_preflight.md").read_text(encoding="utf-8")
     assert "No blocking items found" in clean
     assert "Work waiting to be graded" in clean   # one submission waiting

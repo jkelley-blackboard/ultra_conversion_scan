@@ -19,6 +19,10 @@ PAIRS = [("DEMO101", "DEMO101-7777"), ("DEMO102", "DEMO102-7777")]
 LEARNERS = (5001, 5002)
 
 SETTINGS = [
+    {"registry_key": "release_number", "registry_value": "4001.7.0-rel.4+a1cda0a"},
+    {"registry_key": "featureFlags:feature.course.release.condition.inheritance:Tenant",
+     "registry_value": '{"flagKey":"feature.course.release.condition.inheritance","scope":"Tenant",'
+                       '"value":"true","locked":false,"overridden":false}'},
     {"registry_key": "course.structure.max_level_of_nesting", "registry_value": "3"},
     {"registry_key": "ultraui.converting.content.areas.to.learning.modules", "registry_value": "true"},
     {"registry_key": "ultraui.converting.folder.and.learning.module.descriptions.to.documents", "registry_value": "false"},

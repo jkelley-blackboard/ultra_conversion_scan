@@ -60,6 +60,8 @@ Grade columns by match: matched 2. An ambiguous or not-found column is resolved 
 
 | Setting | This site |
 |---|---|
+| Blackboard LMS version | 4001.7.0-rel.4+a1cda0a |
+| Content takes the release conditions of its folder or learning module | Yes |
 | Levels of nested content (3 by default, 4 with the additional level) | 3 |
 | Content areas become learning modules | Yes |
 | Folder and learning module descriptions become documents | No |

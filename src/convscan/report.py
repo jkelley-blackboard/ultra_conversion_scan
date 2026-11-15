@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import pathlib
 
 import jinja2
@@ -41,6 +42,9 @@ def course_facts(data: dict, cid: str) -> dict:
 
 
 _SETTINGS = {
+    "release_number": "Blackboard LMS version",
+    "featureFlags:feature.course.release.condition.inheritance:Tenant":
+        "Content takes the release conditions of its folder or learning module",
     "course.structure.max_level_of_nesting": "Levels of nested content (3 by default, 4 with the additional level)",
     "ultraui.converting.content.areas.to.learning.modules": "Content areas become learning modules",
     "ultraui.converting.folder.and.learning.module.descriptions.to.documents":
@@ -55,6 +59,11 @@ def site_settings(data: dict) -> list[dict]:
     if not have:
         return []
     def show(v):
+        if isinstance(v, str) and v.startswith("{"):   # a feature flag, stored as JSON
+            try:
+                v = json.loads(v).get("value", v)
+            except ValueError:
+                pass
         return {"true": "Yes", "false": "No", "none": "not set"}.get(str(v).lower(), v)
     return [{"label": label, "value": show(have.get(k))} for k, label in _SETTINGS.items()]
 

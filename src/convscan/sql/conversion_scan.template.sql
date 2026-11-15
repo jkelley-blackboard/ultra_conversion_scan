@@ -790,10 +790,16 @@ order by s.course_id, t.dtcreated;
 --      2026-11-14: nesting levels (3 by default, 4 with the additional level, which can't be
 --      undone), content areas to learning modules, folder and learning module descriptions to
 --      documents, and undeployed tests to question banks. Not scoped to courses.
+--      Also the LMS version (release_number, for example 4001.7.0-rel.4+a1cda0a), so every
+--      report says which version it ran on, and the release-condition inheritance feature flag
+--      (stored as JSON; on in 4001.7 on demo), which decides whether content takes the release
+--      conditions of the folder or learning module it sits in.
 -- ===========================================================================
 select r.registry_key, r.registry_value
 from system_registry r
-where r.registry_key in ('course.structure.max_level_of_nesting',
+where r.registry_key in ('release_number',
+                         'featureFlags:feature.course.release.condition.inheritance:Tenant',
+                         'course.structure.max_level_of_nesting',
                          'ultraui.converting.content.areas.to.learning.modules',
                          'ultraui.converting.folder.and.learning.module.descriptions.to.documents',
                          'ultraui.converting.undeployed.tests.to.question.banks')
