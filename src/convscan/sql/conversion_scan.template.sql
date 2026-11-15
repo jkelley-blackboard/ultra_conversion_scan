@@ -1,12 +1,13 @@
 -- Conversion scan queries (read-only): pre-scan, post-scan and ID map
 -- Target: the Blackboard LMS reporting replica through Direct Data Access (PostgreSQL), or the
 -- same SQL through the Reporting Framework.
--- Draft 2026-11-12, written against the DDA schema docs for 4001.2.0.
--- REVISED 2026-11-13 after schema discovery on demo.blackboard.com DDA (BB601694f547ddb):
+-- Written 2026-11-12 against the DDA schema docs for 4001.2.0, then run and revised on the
+-- demo.blackboard.com DDA (2026-11-13 to 2026-11-15, on 4001.7.0 from 2026-11-10):
 --   * every table and column below exists on demo (checked through information_schema),
 --   * every query ran on demo against a scope of courses with groups, release rules, tests,
 --     pools, SCORM and forums.
---   A production site's build may differ from demo: run S0 (convscan check) first there.
+--   A production site's build may differ from demo: run S0 (convscan check) first there, and
+--   check the schema changes before each LMS release (README.md, "About DDA").
 --
 -- How to use (expanded and run by convscan, or printed with convscan sql):
 --   * The SCOPE placeholder (in braces in each query) lists the courses to scan. Run the
@@ -20,8 +21,11 @@
 --     manifest). Only M2 uses it.
 --   * SELECT only. Learners appear as users_pk1 or course_users.pk1, never by name,
 --     username or email. users_pk1 is the same in the Original and the copy.
---   * S7, S8b, S9, S10 and S12b return one row per learner (per item) and are large for
---     XL shells: run them per batch, off-peak, and save as CSV.
+--   * The LEARNERS placeholder narrows S7, S8b and S10 to the learners read one by one
+--     (students in progress by default; see S7). It always follows a course_users join
+--     aliased cu.
+--   * S7, S8b, S10 and S12b return one row per learner (per item) and are the large ones.
+--     Time of day doesn't matter: DDA is a read replica, so scans put no load on production.
 --   * The replica lags production by a few minutes at most: wait a few minutes after a
 --     copy or repair before the post-scan.
 --
@@ -47,28 +51,33 @@
 
 
 -- ===========================================================================
--- S0. Schema check: every table and column this kit uses. Run first on a new site.
---     Returns only what is MISSING; zero rows means the kit will run.
+-- S0. Schema check: every table this kit reads, and the columns most likely to change (the
+--     ones joins, filters and rules depend on). Run first on a new site and after each
+--     LMS release. Returns only what is MISSING; zero rows means the kit should run.
 -- ===========================================================================
 with need(t, c) as (values
  ('course_main','course_id'),('course_main','ultra_status'),('course_main','available_ind'),('course_main','row_status'),
  ('course_users','role'),('course_users','available_ind'),('course_users','last_access_date'),('course_users','row_status'),
  ('course_contents','cnthndlr_handle'),('course_contents','available_ind'),('course_contents','main_data'),('course_contents','web_url'),
+ ('course_contents','parent_pk1'),
  ('gradebook_main','calculated_ind'),('gradebook_main','visible_ind'),('gradebook_main','visible_in_book_ind'),('gradebook_main','deleted_ind'),
  ('gradebook_main','qti_asi_data_pk1'),('gradebook_main','course_contents_pk1'),('gradebook_main','user_created_ind'),
  ('gradebook_grade','manual_score'),('gradebook_grade','last_attempt_pk1'),('gradebook_grade','highest_attempt_pk1'),
- ('attempt','gradebook_grade_pk1'),('attempt','status'),
- ('avl_crit','crit_type'),('avl_crit','gradebook_main_pk1'),('avl_crit','negate_ind'),('avl_crit','reviewed_content_pk1'),
- ('avl_crit_acl_group','groups_pk1'),('avl_crit_acl_user','users_pk1'),('group_users','course_users_pk1'),
+ ('gradebook_grade','course_users_pk1'),('attempt','gradebook_grade_pk1'),('attempt','status'),
+ ('avl_rule','course_contents_pk1'),
+ ('avl_crit','avl_rule_pk1'),('avl_crit','crit_type'),('avl_crit','gradebook_main_pk1'),('avl_crit','negate_ind'),('avl_crit','reviewed_content_pk1'),
+ ('avl_crit_acl_group','groups_pk1'),('avl_crit_acl_user','users_pk1'),
+ ('groups','group_name'),('group_users','groups_pk1'),('group_users','course_users_pk1'),
  ('qti_asi_data','bbmd_asi_type'),('qti_asi_data','bbmd_assessmenttype'),('qti_asi_data','bbmd_partialcredit'),
+ ('qti_asi_data','bbmd_questiontype'),('qti_asi_data','parent_pk1'),('qti_asi_data','data'),
  ('qti_block_mapping','question_block_pk1'),('qti_block_mapping','question_pk1'),
  ('course_assessment','time_limit'),('course_assessment','timer_completion'),('course_assessment','proctoring_service_handle'),
  ('course_assessment','req_secure_browser_take_ind'),('course_assessment','qti_asi_data_pk1'),
  ('system_registry','registry_key'),('system_registry','registry_value'),('user_test_option','course_users_pk1'),('user_test_option','groups_pk1'),
  ('scormpackage','api_course_id'),('scormregistration','api_registration_id'),('scormregistration','suspended_activity_id'),('scormregistration','runtime_data'),
  ('scormactivity','scorm_registration_id'),('scormactivityrt','location'),('scormactivityrt','suspend_data'),
- ('scormbbpackageinfo','max_attempts'),('scormpackageproperties','time_limit'),
- ('forum_main','confmain_pk1'),('msg_main','forummain_pk1'),
+ ('scormbbpackageinfo','max_attempts'),('scormbbgradebookinfo','gradebook_column_id'),('scormpackageproperties','time_limit'),
+ ('conference_main','crsmain_pk1'),('forum_main','confmain_pk1'),('msg_main','forummain_pk1'),
  ('queued_tasks','task_type'),('queued_tasks','status'),('queued_tasks','course_main_pk1'),('queued_tasks','results'))
 select n.t as table_name, n.c as column_name, 'MISSING' as status
 from need n
@@ -97,7 +106,8 @@ order by s.course_id;
 -- ===========================================================================
 -- S2. Members: every role, and students in progress, completed and disabled, with last
 --     access. An unavailable membership (available_ind 'N') means the learner has completed
---     or their access has expired; 'completed' below counts both. Disabled enrollments (row_status 2) are counted separately. Copy and convert
+--     or their access has expired; 'completed' below counts both. Disabled enrollments
+--     (row_status 2) are counted separately. Copy and convert
 --     KEEPS disabled members (observed 2026-11-13), so the copy load is members plus
 --     students_disabled (plus any disabled staff). Left join, so a course with no members
 --     still returns a row of zeros.
@@ -258,7 +268,7 @@ with scope as ({SCOPE}),
 grades as (
   select gg.gradebook_main_pk1 as col_pk, count(*) as grade_rows
   from scope s
-  join gradebook_main gm  on gm.crsmain_pk1 = s.crs_pk
+  join gradebook_main gm  on gm.crsmain_pk1 = s.crs_pk and coalesce(gm.deleted_ind, 'N') = 'N'
   join gradebook_grade gg on gg.gradebook_main_pk1 = gm.pk1
   group by gg.gradebook_main_pk1)
 select s.course_id, gm.pk1 as col_pk, gm.title, gm.display_title, gm.score_provider_handle,
@@ -556,47 +566,71 @@ order by s.course_id, cc.pk1;
 --     filled in by convscan) narrows the students: by default
 --     to those available (in progress), with the rest totalled in S2b; empty for every enabled
 --     student (--all-learners); on a post-scan, the learners its baseline read.
+--     The grade rows are picked first, so attempts are counted only for the learners read.
 -- ===========================================================================
 with scope as ({SCOPE}),
+gr as (
+  select s.course_id, cu.users_pk1, cu.pk1 as cu_pk, cu.available_ind as learner_available,
+         gm.pk1 as col_pk, gm.title as column_title, gm.course_contents_pk1 as content_pk,
+         gm.score_provider_handle, gg.pk1 as gg_pk, gg.status as grade_status, gg.manual_score,
+         gg.exempt_ind, gg.last_attempt_pk1, gg.highest_attempt_pk1, gg.last_attempt_date
+  from scope s
+  join course_users cu    on cu.crsmain_pk1 = s.crs_pk and cu.role = 'S' and cu.row_status = 0 {LEARNERS}
+  join gradebook_main gm  on gm.crsmain_pk1 = s.crs_pk and coalesce(gm.calculated_ind, 'N') = 'N'
+                         and coalesce(gm.deleted_ind, 'N') = 'N'
+  join gradebook_grade gg on gg.gradebook_main_pk1 = gm.pk1 and gg.course_users_pk1 = cu.pk1),
 att as (
   select a.gradebook_grade_pk1,
          count(*)                                    as attempts,
          count(*) filter (where a.status in (6, 7, 9)) as submitted,
          count(*) filter (where a.status in (3, 4, 8)) as open,
          count(*) filter (where a.status in (6, 9))    as needs_grading
-  from scope s
-  join gradebook_main gm  on gm.crsmain_pk1 = s.crs_pk
-  join gradebook_grade gg on gg.gradebook_main_pk1 = gm.pk1
-  join attempt a          on a.gradebook_grade_pk1 = gg.pk1
+  from gr
+  join attempt a on a.gradebook_grade_pk1 = gr.gg_pk
   group by a.gradebook_grade_pk1)
-select s.course_id, cu.users_pk1, cu.pk1 as cu_pk, cu.available_ind as learner_available,
-  gm.pk1 as col_pk, gm.title as column_title, gm.course_contents_pk1 as content_pk, gm.score_provider_handle,
-  gg.status as grade_status, gg.manual_score, gg.exempt_ind,
+select gr.course_id, gr.users_pk1, gr.cu_pk, gr.learner_available,
+  gr.col_pk, gr.column_title, gr.content_pk, gr.score_provider_handle,
+  gr.grade_status, gr.manual_score, gr.exempt_ind,
   la.score as last_attempt_score, ha.score as highest_attempt_score,
   coalesce(att.attempts, 0) as attempts, coalesce(att.submitted, 0) as submitted,
   coalesce(att.open, 0) as open, coalesce(att.needs_grading, 0) as needs_grading,
-  gg.last_attempt_date
-from scope s
-join course_users cu    on cu.crsmain_pk1 = s.crs_pk and cu.role = 'S' and cu.row_status = 0 {LEARNERS}
-join gradebook_main gm  on gm.crsmain_pk1 = s.crs_pk and coalesce(gm.calculated_ind, 'N') = 'N'
-                       and coalesce(gm.deleted_ind, 'N') = 'N'
-join gradebook_grade gg on gg.gradebook_main_pk1 = gm.pk1 and gg.course_users_pk1 = cu.pk1
-left join att           on att.gradebook_grade_pk1 = gg.pk1
-left join attempt la    on la.pk1 = gg.last_attempt_pk1
-left join attempt ha    on ha.pk1 = coalesce(gg.highest_attempt_pk1, gg.last_attempt_pk1)
-order by s.course_id, cu.users_pk1, gm.pk1;
+  gr.last_attempt_date
+from gr
+left join att        on att.gradebook_grade_pk1 = gr.gg_pk
+left join attempt la on la.pk1 = gr.last_attempt_pk1
+left join attempt ha on ha.pk1 = coalesce(gr.highest_attempt_pk1, gr.last_attempt_pk1)
+order by gr.course_id, gr.users_pk1, gr.col_pk;
 
 -- ===========================================================================
 -- S8. Groups, members, and what uses each group: release criteria and test exceptions
+--     (counted once per table for the whole scope, not group by group)
 -- ===========================================================================
-with scope as ({SCOPE})
-select s.course_id, g.pk1 as group_pk, g.group_name,
-  (select count(*) from group_users gu where gu.groups_pk1 = g.pk1)            as members,
-  (select count(*) from avl_crit_acl_group cg where cg.groups_pk1 = g.pk1)     as criteria_using_group,
-  (select count(*) from user_test_option o where o.groups_pk1 = g.pk1)         as test_exceptions_using_group
-from scope s
-join groups g on g.crsmain_pk1 = s.crs_pk
-order by s.course_id, g.group_name;
+with scope as ({SCOPE}),
+grp as (
+  select s.course_id, g.pk1, g.group_name
+  from scope s
+  join groups g on g.crsmain_pk1 = s.crs_pk),
+mem as (
+  select gu.groups_pk1, count(*) as n
+  from grp join group_users gu on gu.groups_pk1 = grp.pk1
+  group by gu.groups_pk1),
+crit as (
+  select cg.groups_pk1, count(*) as n
+  from grp join avl_crit_acl_group cg on cg.groups_pk1 = grp.pk1
+  group by cg.groups_pk1),
+exc as (
+  select o.groups_pk1, count(*) as n
+  from grp join user_test_option o on o.groups_pk1 = grp.pk1
+  group by o.groups_pk1)
+select grp.course_id, grp.pk1 as group_pk, grp.group_name,
+  coalesce(mem.n, 0)  as members,
+  coalesce(crit.n, 0) as criteria_using_group,
+  coalesce(exc.n, 0)  as test_exceptions_using_group
+from grp
+left join mem  on mem.groups_pk1 = grp.pk1
+left join crit on crit.groups_pk1 = grp.pk1
+left join exc  on exc.groups_pk1 = grp.pk1
+order by grp.course_id, grp.group_name;
 
 -- S8b. Per-learner group membership (users_pk1 and group name; names match across a copy).
 --      Same learner filter as S7.
@@ -620,12 +654,7 @@ select s.course_id, cc.pk1 as content_pk, cc.title as item_title, p.title as par
   gm.title as gate_column_title, gm.calculated_ind as gate_column_calculated,
   ac.min_score, ac.max_score, ac.start_date, ac.end_date,
   rc.title as reviewed_item_title,                                       -- CONTENT_REVIEWED
-  (select string_agg(g.group_name, ' | ' order by g.group_name)
-     from avl_crit_acl_group cg join groups g on g.pk1 = cg.groups_pk1
-    where cg.avl_crit_pk1 = ac.pk1)                                     as groups_named,
-  (select string_agg(cu2.users_pk1::text, ' | ' order by cu2.users_pk1)
-     from avl_crit_acl_user cu2 where cu2.avl_crit_pk1 = ac.pk1)        as users_named,
-  (select count(*) from avl_crit_acl_user cu2 where cu2.avl_crit_pk1 = ac.pk1) as users_named_count
+  gn.groups_named, un.users_named, coalesce(un.users_named_count, 0) as users_named_count
 from scope s
 join course_contents cc on cc.crsmain_pk1 = s.crs_pk
 left join course_contents p on p.pk1 = cc.parent_pk1
@@ -633,6 +662,15 @@ join avl_rule ar        on ar.course_contents_pk1 = cc.pk1
 join avl_crit ac        on ac.avl_rule_pk1 = ar.pk1
 left join gradebook_main gm on gm.pk1 = ac.gradebook_main_pk1
 left join course_contents rc on rc.pk1 = ac.reviewed_content_pk1
+left join lateral (
+  select string_agg(g.group_name, ' | ' order by g.group_name) as groups_named
+  from avl_crit_acl_group cg join groups g on g.pk1 = cg.groups_pk1
+  where cg.avl_crit_pk1 = ac.pk1) gn on true
+left join lateral (
+  select string_agg(au.users_pk1::text, ' | ' order by au.users_pk1) as users_named,
+         count(*) as users_named_count
+  from avl_crit_acl_user au
+  where au.avl_crit_pk1 = ac.pk1) un on true
 order by s.course_id, cc.title, ar.title, ac.crit_type;
 
 
@@ -651,7 +689,8 @@ order by s.course_id, cc.title, ar.title, ac.crit_type;
 --      decodes it while reading and writes only a fingerprint (blob_md5) and the bookmarks.
 --      Run through another tool, drop the runtime_data column if it can't decode it.
 --      Learners are matched by users_pk1 taken from api_registration_id
---      ('<content_id>-<user_id>'). Same learner filter as S7.
+--      ('<content_id>-<user_id>'). Same learner filter as S7, applied in reg so that no other
+--      learner's registration (or its runtime_data blob) is read.
 -- ===========================================================================
 with scope as ({SCOPE}),
 pkg as (
@@ -660,10 +699,13 @@ pkg as (
   join course_contents cc on cc.crsmain_pk1 = s.crs_pk and cc.cnthndlr_handle = 'resource/x-plugin-scormengine'
   join scormpackage p     on p.api_course_id = '_' || cc.pk1 || '_1'),
 reg as (
-  select pkg.course_id, pkg.crs_pk, pkg.content_pk, pkg.scorm_title, r.scorm_registration_id,
-         r.instance_id, r.completed_dt_utc, r.suspended_activity_id, r.runtime_data,
-         split_part(r.api_registration_id, '-', 2) as user_ext
-  from pkg join scormregistration r on r.scorm_package_id = pkg.scorm_package_id),
+  select pkg.course_id, pkg.content_pk, pkg.scorm_title, cu.users_pk1, cu.available_ind,
+         r.scorm_registration_id, r.instance_id, r.completed_dt_utc, r.suspended_activity_id, r.runtime_data
+  from pkg
+  join scormregistration r on r.scorm_package_id = pkg.scorm_package_id
+  join course_users cu     on cu.crsmain_pk1 = pkg.crs_pk
+                          and '_' || cu.users_pk1 || '_1' = split_part(r.api_registration_id, '-', 2)
+                          and cu.role = 'S' and cu.row_status = 0 {LEARNERS}),
 rt as (
   select a.scorm_registration_id,
          count(*)                                                                     as scos,
@@ -677,17 +719,15 @@ rt as (
   join scormactivity a    on a.scorm_registration_id = reg.scorm_registration_id
   join scormactivityrt rt on rt.scorm_activity_id = a.scorm_activity_id
   group by a.scorm_registration_id)
-select reg.course_id, cu.users_pk1, cu.available_ind as learner_available, reg.content_pk, reg.scorm_title,
+select reg.course_id, reg.users_pk1, reg.available_ind as learner_available, reg.content_pk, reg.scorm_title,
   reg.instance_id + 1                      as attempt_no,
   reg.completed_dt_utc,
   reg.suspended_activity_id is not null    as suspended,
   rt.scos, rt.scos_with_location, rt.scos_with_suspend, rt.runtime_md5,
   reg.runtime_data           -- convscan decodes this and keeps only a fingerprint (blob_md5)
 from reg
-join course_users cu on cu.crsmain_pk1 = reg.crs_pk and '_' || cu.users_pk1 || '_1' = reg.user_ext
-                    and cu.role = 'S' and cu.row_status = 0 {LEARNERS}
 left join rt on rt.scorm_registration_id = reg.scorm_registration_id
-order by reg.course_id, cu.users_pk1, reg.content_pk, reg.instance_id;
+order by reg.course_id, reg.users_pk1, reg.content_pk, reg.instance_id;
 
 
 -- ===========================================================================
@@ -766,22 +806,30 @@ order by s.course_id, gm.title, applies_to, g.group_name, cu.users_pk1;
 --      status (seen on demo 2026-11-14): C complete, E error, I in progress. task_type for
 --      the bulk copy and convert is BulkCopyAndConvertOperation, and results holds the
 --      outcome message, including warnings (for example a missing LTI placement on restore).
+--      Three equality joins combined with union (not one OR join), so each can be hashed.
 -- ===========================================================================
 with scope as ({SCOPE}),
-t as (
-  select qt.*, regexp_replace(qt.title, '^[^|]*\|[^|]*\|', '') as subject
+copy_tasks as (
+  select qt.pk1, regexp_replace(qt.title, '^[^|]*\|[^|]*\|', '') as subject
   from queued_tasks qt
-  where qt.course_main_pk1 in (select crs_pk from scope)
-     or qt.title like 'copy|%')
-select s.course_id, t.pk1 as task_pk, t.task_type, t.status,
+  where qt.title like 'copy|%'),
+ids as (
+  select s.course_id, qt.pk1
+  from scope s join queued_tasks qt on qt.course_main_pk1 = s.crs_pk
+  union
+  select s.course_id, c.pk1
+  from scope s join copy_tasks c on s.course_id = split_part(c.subject, ',', 1)
+  union
+  select s.course_id, c.pk1
+  from scope s join copy_tasks c on s.course_id = split_part(c.subject, ',', 2))
+select ids.course_id, t.pk1 as task_pk, t.task_type, t.status,
   case t.status when 'C' then 'complete' when 'E' then 'error' when 'I' then 'in progress' else t.status end as status_label,
   t.dtcreated, t.start_date, t.end_date,
   extract(epoch from (t.end_date - t.start_date))::int as seconds,
-  t.progress, t.subject as task_subject, left(t.results, 400) as results_text
-from scope s
-join t on t.course_main_pk1 = s.crs_pk
-       or (t.title like 'copy|%' and s.course_id in (split_part(t.subject, ',', 1), split_part(t.subject, ',', 2)))
-order by s.course_id, t.dtcreated;
+  t.progress, regexp_replace(t.title, '^[^|]*\|[^|]*\|', '') as task_subject, left(t.results, 400) as results_text
+from ids
+join queued_tasks t on t.pk1 = ids.pk1
+order by ids.course_id, t.dtcreated;
 
 
 -- ===========================================================================

@@ -265,7 +265,11 @@ Next, in order of payoff:
 3. Scan the largest courses on their own, one at a time. (Time of day doesn't matter: DDA is a read
    replica, so scans don't load the production database.)
 4. Stream results instead of loading them whole, and compress the CSVs.
-5. Rewrite the row-by-row counts in S8 as joins.
+
+Done 2026-11-15: S7 and S10 apply the learner filter before counting attempts or reading SCORM
+records (S10 no longer reads other learners' `runtime_data`); S8 and S9 count with joins, not a
+lookup per row; S13 matches copy tasks with hashable joins. Every query returned identical results
+before and after on 13 demo courses, in all three learner modes.
 
 **Other:**
 
