@@ -1,0 +1,98 @@
+# What the scan checks
+
+This page is for anyone reading a pre-conversion report, or deciding what a report should flag. It
+lists every rule in plain language: what the scan looks for, why it matters in an Ultra conversion,
+and what the report recommends.
+
+The rules themselves live in [src/convscan/rules/default.yaml](src/convscan/rules/default.yaml). That
+file is the source of truth: when a rule changes there, update this page to match.
+
+## How findings are reported
+
+Each rule reads the results of one scan query and fires when it finds something. A finding in the
+report gives the count, names a few example items (test titles, group names, column titles), says
+why it matters and recommends an action.
+
+Rules fall into four tiers, shown in the report from most to least serious:
+
+| Tier | Meaning |
+|---|---|
+| **1: Blocks learners** | Learners would be locked out, held back or lose work unless this is handled before or right after the conversion |
+| **2: Needs fixing** | Something changes or goes missing in the conversion and needs repair or a decision |
+| **3: Improves the experience** | Optional tidy-up |
+| **To check** | The scan can't tell from the data alone, or the behavior hasn't been tested yet. Someone needs to look |
+
+Some rules are marked **needs a decision**: the report lists them for the institution to settle at
+hand-off, because there's more than one reasonable answer.
+
+**Confirmed** in the tables below means the conversion behavior was seen in testing or is documented
+by Blackboard. **Not yet confirmed** means the rule flags a likely risk that still needs a test
+conversion to prove.
+
+## Tier 1: blocks learners
+
+| What the scan looks for | Why it matters | What the report recommends | Confirmed |
+|---|---|---|---|
+| The new course ID already exists | The copy can't be made. This is often a leftover test copy | Remove or rename the existing course before the conversion (needs a decision) | Yes |
+| The new course ID is longer than the site's limit | The copy fails | Agree a shorter ID for the course (needs a decision) | Yes |
+| Test attempts open now | An attempt still open at the freeze arrives in Ultra in progress | Ask learners to submit before the freeze, then re-run the scan at the freeze | Yes |
+| Timed tests with attempts open now | A timed attempt left open over the freeze may run out or submit itself | Clear these attempts before the freeze, or confirm how they arrive in Ultra | Not yet |
+| Assignments saved as drafts but not submitted | The drafts may not arrive in Ultra | Ask learners to submit before the freeze, or check the drafts arrive | Not yet |
+| Partial-credit questions in tests whose score opens the next step | Conversion sets partial credit on wrong answers to 0%, so learners who haven't taken the test yet could score lower and be held back | Restore the answer values in the Ultra copy before learners use it (scripted from the pre-conversion data) | Yes |
+| Partial-credit questions in tests whose score sends learners down different paths | The same 0% change could send learners down the wrong path | Restore the answer values, then check one learner on each path | Yes |
+| Release conditions that depend on groups | Groups aren't carried over, so the content closes to the learners it was meant for | Restore the groups and their members after the conversion (scripted), then check access | Yes |
+
+## Tier 2: needs fixing
+
+| What the scan looks for | Why it matters | What the report recommends | Confirmed |
+|---|---|---|---|
+| Partial-credit questions in any graded test | Conversion sets partial credit on wrong answers to 0%, which lowers some scores | Restore the answer values in the Ultra copy (scripted) | Yes |
+| Groups with members | Groups aren't carried over | Restore the groups and their members after the conversion (scripted) | Yes |
+| Grade columns hidden from learners | Ultra can't hide a column separately from its item, so some may become visible | Decide at hand-off whether each should be hidden, removed or left visible (needs a decision) | Yes |
+| Release conditions on discussions | They aren't carried over, so the discussions open to everyone in the course | Re-create the conditions in the Ultra copy, or agree to leave the discussions open | Yes |
+| Folders or learning modules nested deeper than the site allows in Ultra | Conversion moves them up to fit, so the course structure changes | Check the structure in the Ultra copy, or flatten the folders in the Original first | Yes |
+| Tests that draw questions from an undeployed test | The site turns undeployed tests into question banks, which may lose random blocks, question sets and linked questions, so the test may draw fewer questions | Check the drawn-question count in the hand-off report. If it drops, point the draws at the new question bank | Not yet |
+| Content types Ultra doesn't support: wikis, blogs, achievements, module pages, syllabus, self and peer assessment | Conversion removes them | Rebuild them in Ultra (for example as a document, discussion or LTI tool), or agree to drop them (needs a decision) | Yes |
+| Question types Ultra doesn't support: File Upload, Opinion Scale, Ordering, Quiz Bowl | Conversion removes them, so the test's points change | Replace these questions before or after converting. If the test opens the next step, treat it as blocking | Yes |
+| Tests that require a secure browser | The setting may not carry over | Check the setting in the Ultra copy before learners use it | Not yet |
+| Tests that use a proctoring service | The setting may not carry over | Check the setting in the Ultra copy before learners use it | Not yet |
+
+## Tier 3: improves the experience
+
+| What the scan looks for | Why it matters | What the report recommends | Confirmed |
+|---|---|---|---|
+| Grade columns not attached to any item | They were entered by hand or left over, and add clutter | Optional tidy-up after the conversion | Not yet |
+| Items with display dates | The dates may no longer make sense in the new course | Check the dates in Ultra | Not yet |
+
+## To check
+
+| What the scan looks for | Why it matters | What the report recommends | Confirmed |
+|---|---|---|---|
+| The course is available to learners | Bulk copy and convert skips courses that are available | Make the course unavailable at the freeze, before the copy starts | Yes |
+| SCORM attempts in progress | In testing these resumed in Ultra. The hand-off report compares each learner's saved place | Check the SCORM row in the hand-off report, and open a sample in the learner view if it shows differences | Yes |
+| Submissions waiting to be graded | They carry over and can be graded in Ultra | Agree who grades them, and whether before the freeze or in Ultra (needs a decision) | Yes |
+| Ungraded work from students who can no longer open the course | They carry over and can be graded in Ultra | Agree who grades them, and whether before the freeze or in Ultra (needs a decision) | Yes |
+| Content types not yet covered by conversion testing | Nobody has seen how they arrive in Ultra | Convert one example in a test course and check it before this course converts | Not yet |
+| Course links | Blackboard's help lists them as not converting, though conversion creates its own course links for discussions | Check each link arrives and opens the right item | Not yet |
+| Test exceptions (extra time or attempts) for individual learners or groups | Not yet known whether they carry over | Check them in the Ultra copy | Not yet |
+| Test exceptions given to a group | Groups aren't carried over | Check the exceptions after the groups are restored | Not yet |
+| Questions that give credit in proportion to how much is right (matching, jumbled sentence and similar) | Not yet known whether the setting carries over | Check the partial-credit setting on one of them | Not yet |
+| Release conditions on calculated columns | A test that feeds the column controls access indirectly | Check whether any test feeding the column uses partial credit, and check the column's value for a sample of learners | Not yet |
+| Release conditions that name individual learners | Not yet known whether they carry over | Check them in the Ultra copy | Not yet |
+| Links that open HTML pages in the Content Collection | The pages may have Original course addresses built in | Open the pages and look for links to the Original course | Not yet |
+| Links to files in the Content Collection | The files have to stay where they are | Keep the files in place, and open a sample in the Ultra copy | Not yet |
+| LTI tool links | Each tool has to launch from the new course | Launch each tool once in the Ultra copy | Not yet |
+| SCORM packages with a time limit | Not yet known whether the limit carries over | Check the limit in the Ultra copy | Not yet |
+
+## What the scan doesn't check
+
+Every report lists these under "Not checked", because the database can't answer them:
+
+- What a learner sees on screen. Check with a learner view.
+- Links inside SCORM packages and Content Collection pages that point to the Original course.
+- Whether files linked from the Content Collection still exist.
+- Systems outside the LMS that store course or grade column IDs. Give them the ID map from the
+  hand-off report.
+
+The hand-off report's comparison of converted courses with their Originals is separate from these
+rules. Its checks are in [src/convscan/compare.py](src/convscan/compare.py).

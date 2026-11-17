@@ -61,7 +61,8 @@ or `DDA_USER` variable; the password from `DDA_PASSWORD` or a hidden prompt, nev
 
 Severity in the rule table is a number: 1 blocks learners, 2 needs fixing, 3 improves the experience,
 4 makes the most of Ultra, 0 to check by hand. Hand-off results are `same`, `expected`, `different`,
-`action` (shown as "Needs action") and `not checked`.
+`action` (shown as "Needs action") and `not checked`. [RULES.md](RULES.md) lists every rule in plain
+language: what it looks for, why it matters and what the report recommends.
 
 ## How it works
 
