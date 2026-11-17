@@ -32,8 +32,9 @@ read-only on the demo site. Not yet run on a production site.
 **See it first:** [examples/sample_reports/](examples/sample_reports/) has a pre-conversion report,
 a hand-off report and an ID map for two invented courses, one with typical losses and one clean.
 
-**Maintainer:** Jeff Kelley, Blackboard (built November 2026). Internal to Blackboard: a private
-repository.
+**Maintainer:** Jeff Kelley, Blackboard (built November 2026). A public repository, shared with
+institutions converting courses and with Blackboard teams. No client data is stored here: runs and
+reports stay on the machine that runs them.
 
 ## Using it
 
