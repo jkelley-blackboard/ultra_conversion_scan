@@ -568,6 +568,10 @@ order by s.course_id, cc.pk1;
 --     to those available (in progress), with the rest totalled in S2b; empty for every enabled
 --     student (--all-learners); on a post-scan, the learners its baseline read.
 --     The grade rows are picked first, so attempts are counted only for the learners read.
+--     Attempts are counted per grade row through a lateral index lookup, not a join to an
+--     aggregate: on a reporting replica with stale statistics the planner can expect one row
+--     where there are hundreds of thousands, and a nested-loop join to the aggregate then
+--     rescans it for every grade row (a large course went from a timeout to about 20 s).
 -- ===========================================================================
 with scope as ({SCOPE}),
 gr as (
@@ -579,16 +583,7 @@ gr as (
   join course_users cu    on cu.crsmain_pk1 = s.crs_pk and cu.role = 'S' and cu.row_status = 0 {LEARNERS}
   join gradebook_main gm  on gm.crsmain_pk1 = s.crs_pk and coalesce(gm.calculated_ind, 'N') = 'N'
                          and coalesce(gm.deleted_ind, 'N') = 'N'
-  join gradebook_grade gg on gg.gradebook_main_pk1 = gm.pk1 and gg.course_users_pk1 = cu.pk1),
-att as (
-  select a.gradebook_grade_pk1,
-         count(*)                                    as attempts,
-         count(*) filter (where a.status in (6, 7, 9)) as submitted,
-         count(*) filter (where a.status in (3, 4, 8)) as open,
-         count(*) filter (where a.status in (6, 9))    as needs_grading
-  from gr
-  join attempt a on a.gradebook_grade_pk1 = gr.gg_pk
-  group by a.gradebook_grade_pk1)
+  join gradebook_grade gg on gg.gradebook_main_pk1 = gm.pk1 and gg.course_users_pk1 = cu.pk1)
 select gr.course_id, gr.users_pk1, gr.cu_pk, gr.learner_available,
   gr.col_pk, gr.column_title, gr.content_pk, gr.score_provider_handle,
   gr.grade_status, gr.manual_score, gr.exempt_ind,
@@ -597,7 +592,13 @@ select gr.course_id, gr.users_pk1, gr.cu_pk, gr.learner_available,
   coalesce(att.open, 0) as open, coalesce(att.needs_grading, 0) as needs_grading,
   gr.last_attempt_date
 from gr
-left join att        on att.gradebook_grade_pk1 = gr.gg_pk
+left join lateral (
+  select count(*)                                    as attempts,
+         count(*) filter (where a.status in (6, 7, 9)) as submitted,
+         count(*) filter (where a.status in (3, 4, 8)) as open,
+         count(*) filter (where a.status in (6, 9))    as needs_grading
+  from attempt a
+  where a.gradebook_grade_pk1 = gr.gg_pk) att on true
 left join attempt la on la.pk1 = gr.last_attempt_pk1
 left join attempt ha on ha.pk1 = coalesce(gr.highest_attempt_pk1, gr.last_attempt_pk1)
 order by gr.course_id, gr.users_pk1, gr.col_pk;
