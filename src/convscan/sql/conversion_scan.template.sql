@@ -15,8 +15,9 @@
 --     copies (post-scan), then compare the two result sets, matched with M1 and M2.
 --     (Never write a placeholder with its braces in a comment: convscan replaces it
 --     everywhere, and a multi-line scope inside a comment breaks the statement.)
---   * The SUFFIX placeholder is the new course ID rule: the copy's course_id is the
---     Original's course_id plus the suffix (configurable, see config.example.yaml).
+--   * The PREFIX and SUFFIX placeholders are the new course ID rule: the copy's course_id
+--     is the prefix, then the Original's course_id, then the suffix (both configurable, see
+--     config.example.yaml; the prefix is empty by default).
 --   * The PAIRS placeholder lists Original and copy course_ids side by side (the batch
 --     manifest). Only M2 uses it.
 --   * SELECT only. Learners appear as users_pk1 or course_users.pk1, never by name,
@@ -95,9 +96,9 @@ order by 1, 2;
 with scope as ({SCOPE})
 select s.course_id, cm.pk1 as crs_pk, cm.course_name, cm.ultra_status, cm.available_ind, cm.row_status,
   cm.dtcreated, cm.dtmodified,
-  s.course_id || '{SUFFIX}'                                     as expected_new_course_id,
-  length(s.course_id || '{SUFFIX}')                             as new_id_length,
-  exists (select 1 from course_main x where x.course_id = s.course_id || '{SUFFIX}') as new_id_taken
+  '{PREFIX}' || s.course_id || '{SUFFIX}'                       as expected_new_course_id,
+  length('{PREFIX}' || s.course_id || '{SUFFIX}')               as new_id_length,
+  exists (select 1 from course_main x where x.course_id = '{PREFIX}' || s.course_id || '{SUFFIX}') as new_id_taken
 from scope s
 join course_main cm on cm.pk1 = s.crs_pk
 order by s.course_id;

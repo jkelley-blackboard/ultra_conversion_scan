@@ -62,8 +62,13 @@ class DdaRunner:
 
         conn = connection_settings(db)
         try:
+            # Keepalives: a long query sends nothing until it returns, and a proxy or firewall on the
+            # way (a corporate web proxy, for one) can drop the quiet connection. Without them the client then waits
+            # forever; with them a dropped connection fails within about 90 s.
             self.conn = psycopg2.connect(**conn, password=password(), connect_timeout=30,
-                                         application_name=f"convscan/{__version__}")
+                                         application_name=f"convscan/{__version__}",
+                                         keepalives=1, keepalives_idle=30, keepalives_interval=10,
+                                         keepalives_count=6)
         except psycopg2.OperationalError as e:
             detail = str(e).strip().splitlines()[0] if str(e).strip() else type(e).__name__
             raise SystemExit(f"Couldn't connect to {conn['dbname']} on {conn['host']}:{conn['port']} as "

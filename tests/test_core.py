@@ -63,6 +63,31 @@ def test_manifest_defaults_new_id(tmp_path):
     assert "('B2', 'B2_NEW')" in s.pairs_sql()
 
 
+def test_prefix_in_s1():
+    sql = dict(kit.statements(kit.load_template(), "select 1", "", prefix="ULTRA-"))["S1"]
+    assert "'ULTRA-' || s.course_id || ''" in sql
+    assert "{PREFIX}" not in sql
+
+
+def test_no_prefix_by_default():
+    sql = dict(kit.statements(kit.load_template(), "select 1", "-7777"))["S1"]
+    assert "'' || s.course_id || '-7777'" in sql
+
+
+def test_manifest_prefix(tmp_path):
+    f = tmp_path / "m.csv"
+    f.write_text("orig_course_id,new_course_id\nECON101,\nHIST200,HIST200_KEEP\n", encoding="utf-8")
+    s = Scope.from_manifest(str(f), "", "ULTRA-")
+    assert s.pairs == [("ECON101", "ULTRA-ECON101"), ("HIST200", "HIST200_KEEP")]
+    assert s.new_id("BIO150") == "ULTRA-BIO150"
+
+
+def test_node_scope_prefix():
+    s = Scope.from_node("wave1", "", "W1-")
+    assert "'W1-' || o.course_id || ''" in s.copies_sql()
+    assert "'W1-' || o.course_id || '' as new_course_id" in s.pairs_sql()
+
+
 def test_node_scope_quotes_uid():
     s = Scope.from_node("cohort'2", "7777")
     assert "'cohort''2'" in s.originals_sql()

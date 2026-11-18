@@ -14,7 +14,8 @@ DEFAULTS = {
     "data_dir": "~/convscan/data",         # learner-level CSVs and run.json: local, not synced
     "reports_dir": "~/convscan/reports",   # what gets shared
     "prepared_for": "TODO institution name",
-    "new_id_suffix": "-7777",   # bulk copy and convert always puts a hyphen before the suffix
+    "new_id_prefix": "",        # copy course_id = prefix + Original course_id + suffix; bulk copy
+    "new_id_suffix": "-7777",   # and convert always puts a hyphen between the ID and either one
     "max_course_id_length": 15,
     "statement_timeout_s": 900,
     "learner_queries": True,

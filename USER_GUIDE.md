@@ -150,7 +150,7 @@ ECON101,
 HIST200,HIST200-ULTRA
 ```
 
-Leave `new_course_id` blank and convscan uses the Original's ID plus the suffix (next section). Copy
+Leave `new_course_id` blank and convscan uses the Original's ID with the prefix and suffix (next section). Copy
 [examples/manifest.csv](examples/manifest.csv) to start, and pass it with `--manifest batch01.csv`.
 
 ### Or tag them to a hierarchy node
@@ -161,10 +161,14 @@ hand, and a course that moves to another batch is picked up automatically.
 
 ### Agree the new course ID
 
-Blackboard's bulk copy and convert names each copy by adding a suffix to the Original's ID, and always
-puts a hyphen before it: with the suffix `7777`, `ECON101` becomes `ECON101-7777`. That's why convscan's
-default suffix is `-7777`. If copies are named another way, set `new_id_suffix` in the config, or give
-each `new_course_id` in the manifest.
+Blackboard's bulk copy and convert names each copy by adding text to the Original's ID, either after it
+(a suffix) or before it (a prefix), and always puts a hyphen between the two: with the suffix `7777`,
+`ECON101` becomes `ECON101-7777`, and with the prefix `ULTRA-`, it becomes `ULTRA-ECON101`.
+
+convscan finds each copy as prefix + Original ID + suffix, with the hyphen included in whichever you
+set. The defaults are no prefix and the suffix `-7777`. For prefixed copies, set `new_id_prefix: "ULTRA-"`
+and `new_id_suffix: ""` in the config, or use `--prefix ULTRA- --suffix ""` for one run. A manifest row's
+`new_course_id`, when filled in, always wins.
 
 Agree the format with the institution before the first batch. Some systems outside the LMS can't take a
 hyphen, and the pre-conversion report flags a new ID that's already taken or too long.
@@ -435,7 +439,9 @@ works in place of a run name; data and reports then stay together in that folder
 | `--no-learner` | Skips the queries that return a row per learner. Quicker, but the hand-off can't check learner records, and says so |
 | `--all-learners` | `pre` and `sql` only: reads every enabled student's records one by one, not only students in progress. `post` follows its baseline |
 | `--ignore-lag` | `post` only: runs even while the replica is behind |
-| `--suffix <text>` | Overrides the new-ID suffix for this run. `--suffix ""` compares each course with itself, a quick way to try the tool on any site |
+| `--no-reread` | `post` only: doesn't read the Originals again, and compares with the baseline alone. Quicker, but a change to an Original after the pre-scan (a new enrollment, a learner's work) shows as Different rather than Expected |
+| `--suffix <text>` | Overrides the new-ID suffix for this run. `--suffix ""` (with no prefix) compares each course with itself, a quick way to try the tool on any site |
+| `--prefix <text>` | Overrides the new-ID prefix for this run, for example `--prefix ULTRA- --suffix ""` |
 | `--timeout <minutes>` | `tasks --wait` only: how long to wait (120 by default) |
 
 ### Settings
@@ -449,7 +455,8 @@ read from the config file's folder.
 | `data_dir` | `~/convscan/data` | Where each run's data goes. Keep it local |
 | `reports_dir` | `~/convscan/reports` | Where each run's reports go |
 | `prepared_for` | `TODO institution name` | The name at the top of every report |
-| `new_id_suffix` | `-7777` | Added to an Original's course ID to find its copy |
+| `new_id_prefix` | `""` (none) | Put before an Original's course ID to find its copy |
+| `new_id_suffix` | `-7777` | Added after an Original's course ID to find its copy |
 | `max_course_id_length` | 15 | Flags new course IDs longer than this (0 switches the check off) |
 | `statement_timeout_s` | 900 | How long one query may run before the database stops it |
 | `learner_queries` | true | false skips the per-learner queries, like `--no-learner` |

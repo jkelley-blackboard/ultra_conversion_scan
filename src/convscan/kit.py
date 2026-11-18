@@ -52,15 +52,18 @@ def load_template(path: pathlib.Path | None = None) -> str:
 
 def statements(template: str, scope_sql: str, suffix: str, pairs_sql: str | None = None,
                only: set[str] | None = None, skip: set[str] | None = None,
-               learners: str = ACTIVE_LEARNERS) -> list[tuple[str, str]]:
+               learners: str = ACTIVE_LEARNERS, prefix: str = "") -> list[tuple[str, str]]:
     """Return [(label, sql)] in template order.
 
     Statements are separated by a semicolon at the end of a line (comment lines in the template
     must never end in one). Each statement takes the last "-- S<n>." or "-- M<n>." label in its
-    chunk. M2 needs pairs_sql and is left out without it.
+    chunk. M2 needs pairs_sql and is left out without it. The copy's course_id is
+    prefix + Original course_id + suffix.
     """
     out = []
-    for chunk in re.split(r";\s*\n", template.replace("{SUFFIX}", suffix.replace("'", "''"))):
+    filled = (template.replace("{PREFIX}", prefix.replace("'", "''"))
+              .replace("{SUFFIX}", suffix.replace("'", "''")))
+    for chunk in re.split(r";\s*\n", filled):
         labels = _LABEL.findall(chunk)
         if not labels or all(_COMMENT_ONLY.match(line) for line in chunk.splitlines()):
             continue

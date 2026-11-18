@@ -35,9 +35,17 @@ class Scope:
     pairs: list[tuple[str, str]] | None = None
     node: str | None = None
     suffix: str = "-7777"
+    prefix: str = ""
+
+    def new_id(self, orig: str) -> str:
+        """The copy's course_id by the naming rule: prefix + Original course_id + suffix."""
+        return self.prefix + orig + self.suffix
+
+    def _new_id_sql(self, col: str) -> str:
+        return f"{_q(self.prefix)} || {col} || {_q(self.suffix)}"
 
     @classmethod
-    def from_manifest(cls, path: str, suffix: str) -> "Scope":
+    def from_manifest(cls, path: str, suffix: str, prefix: str = "") -> "Scope":
         with open(path, encoding="utf-8-sig") as f:
             rows = list(csv.DictReader(f))
         pairs = []
@@ -45,15 +53,15 @@ class Scope:
             orig = (r.get("orig_course_id") or "").strip()
             if not orig:
                 continue
-            new = (r.get("new_course_id") or "").strip() or orig + suffix
+            new = (r.get("new_course_id") or "").strip() or prefix + orig + suffix
             pairs.append((orig, new))
         if not pairs:
             raise SystemExit(f"{path}: no orig_course_id values")
-        return cls(pairs=pairs, suffix=suffix)
+        return cls(pairs=pairs, suffix=suffix, prefix=prefix)
 
     @classmethod
-    def from_node(cls, uid: str, suffix: str) -> "Scope":
-        return cls(node=uid, suffix=suffix)
+    def from_node(cls, uid: str, suffix: str, prefix: str = "") -> "Scope":
+        return cls(node=uid, suffix=suffix, prefix=prefix)
 
     def describe(self) -> str:
         return f"node {self.node}" if self.node else f"manifest ({len(self.pairs)} courses)"
@@ -65,13 +73,13 @@ class Scope:
 
     def copies_sql(self) -> str:
         if self.node:
-            return _scope_where(f"select o.course_id || {_q(self.suffix)} from (\n    "
+            return _scope_where(f"select {self._new_id_sql('o.course_id')} from (\n    "
                                 f"{node_members_sql(self.node)}) o")
         return _scope_where(_in_list([n for _, n in self.pairs]))
 
     def pairs_sql(self) -> str:
         if self.node:
-            return (f"\n  select o.course_id as orig_course_id, o.course_id || {_q(self.suffix)} as new_course_id"
+            return (f"\n  select o.course_id as orig_course_id, {self._new_id_sql('o.course_id')} as new_course_id"
                     f" from (\n    {node_members_sql(self.node)}) o\n")
         rows = ",\n    ".join(f"({_q(o)}, {_q(n)})" for o, n in self.pairs)
         return f"\n  select * from (values\n    {rows}) as v(orig_course_id, new_course_id)\n"

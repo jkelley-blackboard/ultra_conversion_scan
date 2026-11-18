@@ -15,9 +15,10 @@ from .scope import Scope
 
 def _scope(a, cfg) -> Scope:
     suffix = cfg["new_id_suffix"] if a.suffix is None else a.suffix
+    prefix = cfg.get("new_id_prefix", "") if a.prefix is None else a.prefix
     if a.manifest:
-        return Scope.from_manifest(a.manifest, suffix)
-    return Scope.from_node(a.node, suffix)
+        return Scope.from_manifest(a.manifest, suffix, prefix)
+    return Scope.from_node(a.node, suffix, prefix)
 
 
 def _skip(a, cfg) -> set[str]:
@@ -65,12 +66,13 @@ def cmd_pre(a, cfg):
     scope = _scope(a, cfg)
     filt, learners = _learners(a)
     stmts = kit.statements(kit.load_template(), scope.originals_sql(), scope.suffix, skip=_skip(a, cfg) | {"S0"},
-                           learners=filt)
+                           learners=filt, prefix=scope.prefix)
     runner = DdaRunner(cfg["statement_timeout_s"], cfg["db"])
     out, reports_dir = _new_out(a.out, cfg)
     print(f"pre-scan, {scope.describe()}, {len(stmts)} queries, learners: {learners} -> {out}")
     run_kit(runner, stmts, out, {"mode": "pre", "name": out.name, "scope": scope.describe(),
-                                 "suffix": scope.suffix, "pairs": scope.pairs, "learners": learners,
+                                 "prefix": scope.prefix, "suffix": scope.suffix, "pairs": scope.pairs,
+                                 "learners": learners,
                                  "reports_dir": str(reports_dir)})
     runner.close()
     _render(out, cfg)
@@ -84,7 +86,7 @@ def cmd_post(a, cfg):
     base_run, base = load_run(base_dir)
     if base_run.get("mode") != "pre":
         raise SystemExit(f"{base_dir} is not a pre-scan run")
-    pairs = scope.pairs or [(c, c + scope.suffix) for c in sorted({r["course_id"] for r in base.get("S1", [])})]
+    pairs = scope.pairs or [(c, scope.new_id(c)) for c in sorted({r["course_id"] for r in base.get("S1", [])})]
     runner = DdaRunner(cfg["statement_timeout_s"], cfg["db"])
     # The reporting database is a read replica. After a large batch of copies it can trail production,
     # and a scan of half-replicated copies reports losses that aren't real.
@@ -98,15 +100,18 @@ def cmd_post(a, cfg):
     # The same learners the baseline read, whatever their state now.
     filt, learners = kit.learner_filter(base_run, base, pairs), base_run.get("learners", "all")
     stmts = kit.statements(kit.load_template(), scope.copies_sql(), scope.suffix, pairs_sql=scope.pairs_sql(),
-                           skip=_skip(a, cfg) | {"S0"}, learners=filt)
+                           skip=_skip(a, cfg) | {"S0"}, learners=filt, prefix=scope.prefix)
     # The Originals as they are now: learners keep working after the pre-scan, so the compare
-    # accepts a copy value that matches either the baseline or the Original now.
-    stmts += [(f"{label}_now", sql) for label, sql in
-              kit.statements(kit.load_template(), scope.originals_sql(), scope.suffix,
-                             only=kit.NOW, skip=_skip(a, cfg), learners=filt)]
+    # accepts a copy value that matches either the baseline or the Original now. --no-reread skips
+    # this second read of the Originals; the compare then uses the baseline alone.
+    if not a.no_reread:
+        stmts += [(f"{label}_now", sql) for label, sql in
+                  kit.statements(kit.load_template(), scope.originals_sql(), scope.suffix,
+                                 only=kit.NOW, skip=_skip(a, cfg), learners=filt, prefix=scope.prefix)]
     print(f"post-scan, {scope.describe()}, {len(stmts)} queries, learners: as the baseline ({learners}) -> {out}")
     run_kit(runner, stmts, out, {"mode": "post", "name": out.name, "scope": scope.describe(),
-                                 "suffix": scope.suffix, "pairs": pairs, "baseline": str(base_dir.resolve()),
+                                 "prefix": scope.prefix, "suffix": scope.suffix, "pairs": pairs,
+                                 "baseline": str(base_dir.resolve()),
                                  "learners": learners, "replica_lag": lag, "reports_dir": str(reports_dir)})
     runner.close()
     _render(out, cfg)
@@ -139,7 +144,8 @@ def cmd_tasks(a, cfg):
     scope = _scope(a, cfg)
     if not scope.pairs:
         raise SystemExit("tasks needs --manifest (a node scope has no copy list until the copies exist)")
-    sql = dict(kit.statements(kit.load_template(), scope.copies_sql(), scope.suffix, only={"S13"}))["S13"]
+    sql = dict(kit.statements(kit.load_template(), scope.copies_sql(), scope.suffix, only={"S13"},
+                              prefix=scope.prefix))["S13"]
     runner = DdaRunner(cfg["statement_timeout_s"], cfg["db"])
     deadline = time.time() + a.timeout * 60
     while True:
@@ -187,10 +193,11 @@ def cmd_sql(a, cfg):
     filt = _learners(a)[0]
     if a.scope == "original":
         stmts = kit.statements(kit.load_template(), scope.originals_sql(), scope.suffix, skip=_skip(a, cfg),
-                               learners=filt)
+                               learners=filt, prefix=scope.prefix)
     else:
         stmts = kit.statements(kit.load_template(), scope.copies_sql(), scope.suffix,
-                               pairs_sql=scope.pairs_sql(), skip=_skip(a, cfg), learners=filt)
+                               pairs_sql=scope.pairs_sql(), skip=_skip(a, cfg), learners=filt,
+                               prefix=scope.prefix)
     sys.stdout.write(kit.as_script(stmts))
 
 
@@ -229,6 +236,7 @@ def main(argv=None):
         g.add_argument("--manifest", help="CSV with orig_course_id,new_course_id")
         g.add_argument("--node", help="institutional hierarchy node batch_uid")
         sp.add_argument("--suffix", help="new course ID suffix (overrides config; '' compares a course with itself)")
+        sp.add_argument("--prefix", help="new course ID prefix, for example ULTRA- (overrides config)")
         sp.add_argument("--no-learner", action="store_true", help="skip the per-learner queries")
 
     sp = sub.add_parser("init", help="create a starter config (asks for the connection details)")
@@ -250,6 +258,9 @@ def main(argv=None):
                     help="run name (data under data_dir, reports under reports_dir), or a folder path")
     sp.add_argument("--ignore-lag", action="store_true",
                     help="run even if the reporting database trails production by more than max_replica_lag_s")
+    sp.add_argument("--no-reread", action="store_true",
+                    help="don't read the Originals again; compare with the baseline alone (quicker, but "
+                         "changes to the Originals after the pre-scan show as Different, not Expected)")
     sp.set_defaults(fn=cmd_post)
     sp = sub.add_parser("tasks", help="show (or --wait for) the copy and convert task of each course")
     scoped(sp)
