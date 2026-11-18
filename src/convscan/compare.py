@@ -493,6 +493,10 @@ def check_work_in_progress(p: Pair):
     for fld, label in (("open", "Attempts in progress"), ("needs_grading", "Submissions waiting for grading")):
         ov, od = wip(p.orig("S7"), fld)
         nv, nd = wip(p.copy("S7"), fld)
+        if not p.students_copied and ov and not nv:
+            p.add("Learner records", label, ov, nv, EXPECTED,
+                  f"Copied without students: this work stays in the Original (Original: {od}).")
+            continue
         note = f"Original: {od}. Ultra: {nd}." if (ov or nv) else ""
         if ov == nv and od != nd:
             note += " (Assignments convert to Ultra assessments, so the split by type changes.)"
@@ -504,6 +508,12 @@ def check_learner_records(p: Pair):
     if not (p.both("S7") and "M2" in p.ran_post):
         p.add("Learner records", "Grade and attempt records", "", "", NOT_CHECKED,
               "The learner-level data or the column map is missing from one of the scans (run without --no-learner).")
+        return
+    if not p.students_copied and p.orig("S7") and not p.copy("S7"):
+        n = len(p.orig("S7"))
+        p.add("Learner records", "Grade and attempt records matching", n, 0, EXPECTED,
+              f"Copied without students: the {n} record(s) stay in the Original, and are compared when the "
+              "course is copied with its learners.")
         return
     cmap = column_map(p.post, p.o)
     new_rows = {(r["users_pk1"], r["col_pk"]): r for r in p.copy("S7")}
@@ -563,6 +573,13 @@ def check_scorm(p: Pair):
     if not p.both("S10"):
         p.add("SCORM", "SCORM resume state", "", "", NOT_CHECKED,
               "The learner-level SCORM data is missing from one of the scans (run without --no-learner).")
+        return
+
+    if not p.students_copied and p.orig("S10") and not p.copy("S10"):
+        n = len(p.orig("S10"))
+        p.add("SCORM", "SCORM records with the same resume state", n, 0, EXPECTED,
+              f"Copied without students: the {n} SCORM record(s) stay in the Original, and are compared when "
+              "the course is copied with its learners.")
         return
 
     def key(r):

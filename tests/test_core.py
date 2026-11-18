@@ -175,6 +175,25 @@ def test_members_copied_without_students():
     assert _status(p, "Students")["status"] == DIFFERENT
 
 
+def test_learner_rows_copied_without_students():
+    from convscan.compare import (DIFFERENT, EXPECTED, check_learner_records, check_scorm,
+                                  check_work_in_progress)
+    base = {"S7": [{"course_id": "C1", "users_pk1": 1, "col_pk": 10, "open": 1, "needs_grading": 0,
+                    "score_provider_handle": "resource/x-bb-assessment"}],
+            "S10": [{"course_id": "C1", "users_pk1": 1, "scorm_title": "Unit 1", "attempt_no": 1}]}
+    post = {"S7": [], "S10": [], "M2": []}
+    p = _pair(base, post, students_copied=False)
+    for check in (check_work_in_progress, check_learner_records, check_scorm):
+        check(p)
+    assert {c["check"]: c["status"] for c in p.checks} == {
+        "Attempts in progress": EXPECTED, "Submissions waiting for grading": "same",
+        "Grade and attempt records matching": EXPECTED, "SCORM records with the same resume state": EXPECTED}
+    assert not p.diffs
+    p = _pair(base, post)   # students expected to copy: the same empty copy is a loss
+    check_learner_records(p)
+    assert _status(p, "Grade and attempt records matching")["status"] == DIFFERENT
+
+
 def test_question_draw_note_follows_direction():
     from convscan.compare import check_question_sources
     base = {"S5e": [{"course_id": "C1", "block_draws": 0}]}
