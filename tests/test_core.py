@@ -142,3 +142,50 @@ def test_filters():
     assert rules.matches(row, {"a__gt": 2, "b__null": True, "c__startswith": "resource/"})
     assert not rules.matches(row, {"a__lt": 3})
     assert rules.matches(row, {"b__ne": ["N"]}) and not rules.matches(row, {"b__ne": ["N", None]})
+
+
+def _pair(base, post, **kw):
+    from convscan.compare import Pair
+    labels = set(base) | set(post)
+    return Pair("C1", "U-C1", base, post, labels, labels, **kw)
+
+
+def _status(p, check):
+    return next(c for c in p.checks if c["check"] == check)
+
+
+def test_grade_columns_default_totals_dropped_when_nothing_graded():
+    from convscan.compare import EXPECTED, check_grade_columns
+    base = {"S4": [{"course_id": "C1", "title": "OutcomeDefinition.Total.title"},
+                   {"course_id": "C1", "title": "OutcomeDefinition.WeightedTotal.title"}]}
+    p = _pair(base, {"S4": []})
+    check_grade_columns(p)
+    assert _status(p, "Grade columns")["status"] == EXPECTED
+
+
+def test_members_copied_without_students():
+    from convscan.compare import DIFFERENT, EXPECTED, check_members
+    base = {"S2": [{"course_id": "C1", "members": 120, "students": 100, "in_progress": 60, "completed": 40}]}
+    post = {"S2": [{"course_id": "U-C1", "members": 20, "students": 0, "in_progress": 0, "completed": 0}]}
+    p = _pair(base, post, students_copied=False)
+    check_members(p)
+    assert all(c["status"] == EXPECTED for c in p.checks if c["original"] != c["ultra"])
+    p = _pair(base, post)   # students expected to copy: the same counts are losses
+    check_members(p)
+    assert _status(p, "Students")["status"] == DIFFERENT
+
+
+def test_question_draw_note_follows_direction():
+    from convscan.compare import check_question_sources
+    base = {"S5e": [{"course_id": "C1", "block_draws": 0}]}
+    p = _pair(base, {"S5e": [{"course_id": "U-C1", "block_draws": 240}]})
+    check_question_sources(p)
+    assert "More draws" in p.checks[0]["note"]
+
+
+def test_dropped_link_types_named():
+    from convscan.compare import check_content_types
+    base = {"S3c": [{"course_id": "C1", "cnthndlr_handle": "resource/x-bb-toollink", "items": 2}]}
+    p = _pair(base, {"S3c": []}, labels={"resource/x-bb-toollink": "Tool link"})
+    check_content_types(p)
+    assert "Known loss: conversion drops tool links" in p.checks[0]["note"]

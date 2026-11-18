@@ -120,7 +120,8 @@ def render_post(run_dir: pathlib.Path, run: dict, data: dict, base_run: dict, ba
               "settings": site_settings(data)}
     written, summary, all_map, all_diffs = [], [], [], []
     for o, n in run["pairs"]:
-        checks, diffs = compare.compare_course(o, n, base, data, ran_base, ran_post, labels=labels)
+        checks, diffs = compare.compare_course(o, n, base, data, ran_base, ran_post, labels=labels,
+                                               students_copied=run.get("students_copied", True))
         idmap = compare.id_map(o, n, base, data)
         all_map += idmap
         all_diffs += diffs

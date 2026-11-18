@@ -18,6 +18,12 @@ _TYPO = str.maketrans({"–": "-", "—": "-", "‘": "'", "’": "'", "“": '"
 
 # Ultra keeps one overall grade, so the Original's weighted total has no counterpart.
 _WEIGHTED = re.compile(r"weighted ?total|OutcomeDefinition\.WeightedTotal", re.I)
+# The Original's default Total column. Conversion keeps it as a calculated "Total" when the course has
+# graded items, and removes it when there is nothing to total.
+_DEFAULT_TOTAL = re.compile(r"^(OutcomeDefinition\.Total\.title|total)$", re.I)
+
+# Content types conversion drops (the pre-conversion rules course_links and tool_links).
+_DROPPED_BY_CONVERSION = {"resource/x-bb-courselink", "resource/x-bb-toollink"}
 
 # Content types that conversion renames: compare them under one name.
 _HANDLER = {"resource/x-bb-assignment": "resource/x-bb-asmt-test-link", "resource/x-bb-lesson": "resource/x-bb-folder",
@@ -95,6 +101,7 @@ class Pair:
     ran_base: set
     ran_post: set
     labels: dict = field(default_factory=dict)  # plain names for system values (the rule file's labels)
+    students_copied: bool = True                # False: copied without user activity (post --no-students)
     checks: list = field(default_factory=list)
     diffs: list = field(default_factory=list)   # per-learner differences, for data/diff_learner_records.csv
 
@@ -152,6 +159,20 @@ def check_members(p: Pair):
                        ("in_progress", "Students in progress"), ("completed", "Students completed or expired"),
                        ("students_disabled", "Disabled students")):
         ov, nv = a.get(col) or 0, b.get(col) or 0
+        if not p.students_copied and ov != nv:
+            # Copied without user activity: students stay behind, other members (instructors and
+            # other course roles) are kept.
+            if col == "members":
+                staff = (a.get("members") or 0) - (a.get("students") or 0)
+                if nv == staff:
+                    p.add("Members", label, ov, nv, EXPECTED,
+                          f"Copied without students: the {nv} non-student member(s) were kept.")
+                    continue
+            elif nv == 0:
+                p.add("Members", label, ov, nv, EXPECTED, "Copied without students.")
+                continue
+            p.add("Members", label, ov, nv, DIFFERENT, "Copied without students, but this count doesn't fit that.")
+            continue
         if ov == nv:
             p.add("Members", label, ov, nv, SAME)
         elif now is not None and (now.get(col) or 0) == nv:
@@ -195,8 +216,11 @@ def check_content_types(p: Pair):
     oi, ni = inventory(p.orig("S3c")), inventory(p.copy("S3c"))
     short = [f"{p.name(h)} {c} to {ni.get(h, 0)}" for h, c in sorted(oi.items()) if ni.get(h, 0) < c]
     added = [f"{p.name(h)} +{c - oi.get(h, 0)}" for h, c in sorted(ni.items()) if c > oi.get(h, 0)]
+    dropped = sorted({p.name(h) for h, c in oi.items() if h in _DROPPED_BY_CONVERSION and ni.get(h, 0) < c})
     p.add("Content", "Content types carried over", len(oi), len(oi) - len(short), DIFFERENT if short else SAME,
           ("Fewer in Ultra: " + "; ".join(short) + ". " if short else "")
+          + ("Known loss: conversion drops " + " and ".join(x.lower() + "s" for x in dropped)
+             + "; recreate the ones learners need. " if dropped else "")
           + ("Added by conversion: " + "; ".join(added) + "." if added else ""))
 
 
@@ -243,15 +267,20 @@ def check_availability(p: Pair):
 
 
 def check_grade_columns(p: Pair):
-    """Grade column count (S4). Ultra drops the weighted total."""
+    """Grade column count (S4). Ultra drops the weighted total, and the default total when the course
+    has nothing to total."""
     if not p.both("S4"):
         return
     ov, nv = len(p.orig("S4")), len(p.copy("S4"))
     weighted = sum(1 for r in p.orig("S4") if _WEIGHTED.search(r.get("title") or ""))
+    totals = sum(1 for r in p.orig("S4") if _DEFAULT_TOTAL.search(r.get("title") or ""))
     if ov == nv:
         p.add("Grades", "Grade columns", ov, nv, SAME)
     elif nv == ov - weighted:
         p.add("Grades", "Grade columns", ov, nv, EXPECTED, "Ultra drops the weighted total column.")
+    elif nv == ov - weighted - totals:
+        p.add("Grades", "Grade columns", ov, nv, EXPECTED,
+              "Ultra drops the weighted total, and the default total column when nothing in the course is graded.")
     elif nv > ov:
         p.add("Grades", "Grade columns", ov, nv, EXPECTED, "Extra columns in Ultra are listed in the ID map.")
     else:
@@ -333,8 +362,15 @@ def check_question_sources(p: Pair):
         return
     a, b = _one(p.base, "S5e", p.o), _one(p.post, "S5e", p.n)
     ov, nv = a.get("block_draws") or 0, b.get("block_draws") or 0
+    if ov == nv:
+        note = ""
+    elif nv < ov:
+        note = "Tests may now draw fewer questions: check them."
+    else:
+        note = ("More draws in Ultra: question pools or undeployed tests probably became question banks. "
+                "Check each test still draws the same number of questions per attempt.")
     p.add("Tests", "Questions drawn through random blocks and question sets", ov, nv,
-          SAME if ov == nv else DIFFERENT, "" if ov == nv else "Tests may now draw fewer questions: check them.")
+          SAME if ov == nv else DIFFERENT, note)
     op, np_ = a.get("pools_and_banks") or 0, b.get("pools_and_banks") or 0
     if np_ != op:
         p.add("Tests", "Pools and question banks", op, np_, EXPECTED if np_ > op else DIFFERENT,
@@ -517,6 +553,10 @@ def check_inactive_records(p: Pair):
         if not any(a.values()) and not any(b.values()):
             continue
         now = totals(p.now("S2b"), state) if "S2b_now" in p.ran_post else None
+        if not p.students_copied and not any(b.values()):
+            p.add("Learner records", label, show(a), show(b), EXPECTED,
+                  "Copied without students: their records stay in the Original.")
+            continue
         if a == b:
             p.add("Learner records", label, show(a), show(b), SAME,
                   "Compared as totals: grade records, attempts and SCORM records.")
@@ -549,9 +589,9 @@ CHECKS = (check_copy_task, check_members, check_content_counts, check_content_ty
 
 
 def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_post: set,
-                   labels: dict | None = None):
+                   labels: dict | None = None, students_copied: bool = True):
     """Return (checks, learner_diffs) for one Original and its copy."""
-    p = Pair(o, n, base, post, ran_base, ran_post, labels=labels or {})
+    p = Pair(o, n, base, post, ran_base, ran_post, labels=labels or {}, students_copied=students_copied)
     if not _one(post, "S1", n):
         p.add("Course", "Copy exists", o, "not found", ACTION, f"No course with the ID {n}.")
         return p.checks, p.diffs
@@ -572,6 +612,8 @@ def id_map(o: str, n: str, base: dict, post: dict) -> list[dict]:
         status = m.get("match_status", "")
         if status == "not found" and _WEIGHTED.search(m.get("title") or ""):
             status = "removed in Ultra (weighted total)"
+        elif status == "not found" and _DEFAULT_TOTAL.search(m.get("title") or ""):
+            status = "removed in Ultra (default total, nothing graded)"
         rows.append({"orig_course_id": o, "new_course_id": n, "orig_id": _ext(m["orig_col_pk"]),
                      "new_id": _ext(m.get("new_col_pk")), "kind": "grade column", "title": m.get("title", ""),
                      "attached_item": m.get("content_title") or "", "match_status": status})

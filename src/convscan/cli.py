@@ -112,6 +112,7 @@ def cmd_post(a, cfg):
     run_kit(runner, stmts, out, {"mode": "post", "name": out.name, "scope": scope.describe(),
                                  "prefix": scope.prefix, "suffix": scope.suffix, "pairs": pairs,
                                  "baseline": str(base_dir.resolve()),
+                                 "students_copied": not a.no_students,
                                  "learners": learners, "replica_lag": lag, "reports_dir": str(reports_dir)})
     runner.close()
     _render(out, cfg)
@@ -134,6 +135,14 @@ def cmd_render(a, cfg):
     run_dir = paths.resolve(a.run, cfg)[0]
     if not (run_dir / "run.json").exists():
         raise SystemExit(f"no run at {run_dir}")
+    if a.no_students:
+        # Mark a post-scan run as copied without students, for a run made before --no-students.
+        path = run_dir / "run.json"
+        run = json.loads(path.read_text(encoding="utf-8"))
+        if run.get("mode") != "post":
+            raise SystemExit("--no-students applies to post-scan runs only")
+        run["students_copied"] = False
+        path.write_text(json.dumps(run, indent=2), encoding="utf-8")
     _render(run_dir, cfg)
 
 
@@ -261,6 +270,9 @@ def main(argv=None):
     sp.add_argument("--no-reread", action="store_true",
                     help="don't read the Originals again; compare with the baseline alone (quicker, but "
                          "changes to the Originals after the pre-scan show as Different, not Expected)")
+    no_students = ("the copies were made without user activity: student counts and records left in the "
+                   "Original show as Expected, not Different")
+    sp.add_argument("--no-students", action="store_true", help=no_students)
     sp.set_defaults(fn=cmd_post)
     sp = sub.add_parser("tasks", help="show (or --wait for) the copy and convert task of each course")
     scoped(sp)
@@ -270,6 +282,8 @@ def main(argv=None):
     sp.set_defaults(fn=cmd_tasks)
     sp = sub.add_parser("render", help="rebuild reports from a saved run (no database)")
     sp.add_argument("run", help="the run's name, or its data folder")
+    sp.add_argument("--no-students", action="store_true",
+                    help="mark a post-scan run as copied without user activity, then rebuild its reports")
     sp.set_defaults(fn=cmd_render)
     sp = sub.add_parser("sql", help="print the expanded SQL for one scope")
     scoped(sp)

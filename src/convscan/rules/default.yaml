@@ -159,6 +159,26 @@ rules:
     says: "{n} group(s) with members: {examples}. Groups are not carried over."
     action: Restore the groups and their members after the conversion (scripted).
 
+  - id: course_links
+    title: Course links
+    source: S3c
+    where: {cnthndlr_handle: resource/x-bb-courselink}
+    measure: sum(items)
+    severity: 2
+    known: true
+    says: "{value} course link(s). Conversion drops them (seen in conversion testing), apart from the course links it creates for discussions."
+    action: Recreate each link in the Ultra copy, or replace it with a link to the item.
+
+  - id: tool_links
+    title: Tool links
+    source: S3c
+    where: {cnthndlr_handle: resource/x-bb-toollink}
+    measure: sum(items)
+    severity: 2
+    known: true
+    says: "{value} tool link(s) (links to course tools such as Announcements or the Gradebook). Conversion drops them (seen in conversion testing)."
+    action: Recreate the ones learners need in the Ultra copy, where most course tools are already in the course navigation.
+
   - id: hidden_columns
     title: Grade columns hidden from learners
     source: S4
@@ -283,8 +303,10 @@ rules:
     where: {available_ind: "Y"}
     severity: 0
     known: true
-    says: "The course is available to learners. Bulk copy and convert skips courses that are available."
-    action: Make the course unavailable at the freeze, before the copy starts.
+    # Blackboard's help says available courses are skipped, but bulk copy and convert copied available
+    # Originals in conversion testing, so the tool doesn't enforce the freeze: the process must.
+    says: "The course is available to learners. Bulk copy and convert will still copy it, but work learners do in the Original after the copy isn't carried over."
+    action: Make the course unavailable (closed) before the copy that carries learners over. This is a required step, not one the copy checks.
 
   - id: open_scorm_attempts
     title: SCORM attempts in progress
@@ -336,6 +358,7 @@ rules:
         - resource/x-bb-assignment
         - resource/x-bb-blankpage
         - resource/x-bb-courselink
+        - resource/x-bb-toollink
         - resource/x-bb-wiki
         - resource/x-bb-bloglink
         - resource/x-bb-achievement
@@ -348,16 +371,6 @@ rules:
     examples: cnthndlr_handle
     says: "{value} item(s) of {n} content type(s) not yet covered by conversion testing: {examples}."
     action: Convert one example in a test course and check it in Ultra before this course converts.
-
-  - id: course_links
-    title: Course links
-    source: S3c
-    where: {cnthndlr_handle: resource/x-bb-courselink}
-    measure: sum(items)
-    severity: 0
-    known: false
-    says: "{value} course link(s). Blackboard's help lists course links among items that don't convert, though conversion creates its own course links for discussions."
-    action: Check each link arrives in Ultra and opens the right item.
 
   - id: test_exceptions
     title: Test exceptions (extra time or attempts)

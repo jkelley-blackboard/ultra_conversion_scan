@@ -439,6 +439,7 @@ works in place of a run name; data and reports then stay together in that folder
 | `--no-learner` | Skips the queries that return a row per learner. Quicker, but the hand-off can't check learner records, and says so |
 | `--all-learners` | `pre` and `sql` only: reads every enabled student's records one by one, not only students in progress. `post` follows its baseline |
 | `--ignore-lag` | `post` only: runs even while the replica is behind |
+| `--no-students` | `post` and `render`: the copies were made without user activity. Student counts, and unavailable or disabled students' records, that stay in the Original show as Expected instead of Different; the non-student members kept are counted. On `render` it marks an existing post-scan run |
 | `--no-reread` | `post` only: doesn't read the Originals again, and compares with the baseline alone. Quicker, but a change to an Original after the pre-scan (a new enrollment, a learner's work) shows as Different rather than Expected |
 | `--suffix <text>` | Overrides the new-ID suffix for this run. `--suffix ""` (with no prefix) compares each course with itself, a quick way to try the tool on any site |
 | `--prefix <text>` | Overrides the new-ID prefix for this run, for example `--prefix ULTRA- --suffix ""` |

@@ -48,6 +48,8 @@ conversion to prove.
 |---|---|---|---|
 | Partial-credit questions in any graded test | Conversion sets partial credit on wrong answers to 0%, which lowers some scores | Restore the answer values in the Ultra copy (scripted) | Yes |
 | Groups with members | Groups aren't carried over | Restore the groups and their members after the conversion (scripted) | Yes |
+| Course links | Conversion drops them, apart from the course links it creates for discussions | Recreate each link in the Ultra copy, or replace it with a link to the item | Yes |
+| Tool links (links to course tools such as Announcements or the Gradebook) | Conversion drops them | Recreate the ones learners need; most course tools are already in Ultra's course navigation | Yes |
 | Grade columns hidden from learners | Ultra can't hide a column separately from its item, so some may become visible | Decide at hand-off whether each should be hidden, removed or left visible (needs a decision) | Yes |
 | Release conditions on discussions | They aren't carried over, so the discussions open to everyone in the course | Re-create the conditions in the Ultra copy, or agree to leave the discussions open | Yes |
 | Folders or learning modules nested deeper than the site allows in Ultra | Conversion moves them up to fit, so the course structure changes | Check the structure in the Ultra copy, or flatten the folders in the Original first | Yes |
@@ -68,12 +70,11 @@ conversion to prove.
 
 | What the scan looks for | Why it matters | What the report recommends | Confirmed |
 |---|---|---|---|
-| The course is available to learners | Bulk copy and convert skips courses that are available | Make the course unavailable at the freeze, before the copy starts | Yes |
+| The course is available to learners | Bulk copy and convert will still copy it (Blackboard's help says otherwise, but available courses copied in conversion testing), and work learners do in the Original after the copy isn't carried over | Make the course unavailable (closed) before the copy that carries learners over. It's a required step that the copy doesn't check | Yes |
 | SCORM attempts in progress | In testing these resumed in Ultra. The hand-off report compares each learner's saved place | Check the SCORM row in the hand-off report, and open a sample in the learner view if it shows differences | Yes |
 | Submissions waiting to be graded | They carry over and can be graded in Ultra | Agree who grades them, and whether before the freeze or in Ultra (needs a decision) | Yes |
 | Ungraded work from students who can no longer open the course | They carry over and can be graded in Ultra | Agree who grades them, and whether before the freeze or in Ultra (needs a decision) | Yes |
 | Content types not yet covered by conversion testing | Nobody has seen how they arrive in Ultra | Convert one example in a test course and check it before this course converts | Not yet |
-| Course links | Blackboard's help lists them as not converting, though conversion creates its own course links for discussions | Check each link arrives and opens the right item | Not yet |
 | Test exceptions (extra time or attempts) for individual learners or groups | Not yet known whether they carry over | Check them in the Ultra copy | Not yet |
 | Test exceptions given to a group | Groups aren't carried over | Check the exceptions after the groups are restored | Not yet |
 | Questions that give credit in proportion to how much is right (matching, jumbled sentence and similar) | Not yet known whether the setting carries over | Check the partial-credit setting on one of them | Not yet |
