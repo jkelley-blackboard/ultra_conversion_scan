@@ -6,5 +6,5 @@
 
 | Course | Name | Students in progress | Blocks learners | Needs fixing | Improves | To check | Decisions | Report |
 |---|---|---|---|---|---|---|---|---|
-| DEMO101 | Introduction to Portfolio Management | 2 | 3 | 5 | 0 | 0 | 1 | [DEMO101_preflight.md](DEMO101_preflight.md) |
+| DEMO101 | Introduction to Portfolio Management | 2 | 3 | 5 | 0 | 0 | 2 | [DEMO101_preflight.md](DEMO101_preflight.md) |
 | DEMO102 | Ethics in Practice | 2 | 0 | 0 | 0 | 1 | 1 | [DEMO102_preflight.md](DEMO102_preflight.md) |

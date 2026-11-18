@@ -6,5 +6,5 @@
 
 | Original | Ultra copy | Name | Same | Expected | Different | Needs action | Not checked | Report |
 |---|---|---|---|---|---|---|---|---|
-| DEMO101 | DEMO101-7777 | Introduction to Portfolio Management | 21 | 3 | 0 | 4 | 0 | [DEMO101_handoff.md](DEMO101_handoff.md) |
+| DEMO101 | DEMO101-7777 | Introduction to Portfolio Management | 21 | 4 | 0 | 4 | 0 | [DEMO101_handoff.md](DEMO101_handoff.md) |
 | DEMO102 | DEMO102-7777 | Ethics in Practice | 25 | 1 | 0 | 0 | 0 | [DEMO102_handoff.md](DEMO102_handoff.md) |

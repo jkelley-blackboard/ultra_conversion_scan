@@ -228,16 +228,23 @@ tree as (
          c.web_url, t.path || ' / ' || c.title, t.depth + 1
   from tree t join course_contents c on c.parent_pk1 = t.pk1)
 select t.course_id, t.pk1 as content_pk, t.cnthndlr_handle, t.title, t.available_ind, t.depth, t.path,
-  p.title as parent_title, t.web_url
+  p.title as parent_title, t.web_url, t.parent_pk1 as parent_pk
 from tree t
 left join course_contents p on p.pk1 = t.parent_pk1
 order by t.course_id, t.path;
 
--- S3d. Folders and learning modules deeper than the site's nesting limit (S14, 3 if unset), in
---      Original courses only. A content area becomes a top-level item in Ultra (level 1), so a
---      container at depth d in the Original lands at level d + 1: on demo, Ultra courses hold
---      their top-level folders at depth 1 under a hidden root. Conversion moves deeper containers
---      up to fit (September sample), which changes the course's structure. One row per container.
+-- S3d. Folders and learning modules nested too deep for the site's limit (S14, 3 levels if
+--      unset, 4 with the additional nesting level), in Original courses only. A content area
+--      becomes a top-level item in Ultra (level 1), so a container at depth d in the Original
+--      lands at level d + 1. The limit counts levels of nested content, so a container needs a
+--      level below it for its content: with 3 levels, a learning module (1) holds a folder (2),
+--      whose content is level 3, and a folder at level 3 can't hold anything. Conversion moves
+--      each such container up to sit directly in its learning module (level 2), with the items
+--      directly in it; a too-deep container inside another comes out too, as its own folder
+--      beside it (seen in conversion testing: every container at level 3 or deeper moved there,
+--      every one at level 2 stayed). One row per container. items_here counts the items
+--      directly in it, which move with it. moves_one_level_more is 1 when it would still be
+--      too deep with one more level allowed (the additional nesting level).
 with recursive scope as ({SCOPE}),
 lim as (
   select coalesce(max(case when r.registry_value ~ '^[0-9]+$' then r.registry_value::int end), 3) as max_level
@@ -251,14 +258,24 @@ tree as (
   where cc.parent_pk1 is null
   union all
   select t.course_id, c.pk1, c.title, c.cnthndlr_handle, t.path || ' / ' || c.title, t.depth + 1
-  from tree t join course_contents c on c.parent_pk1 = t.pk1)
-select t.course_id, t.pk1 as content_pk, t.cnthndlr_handle, t.title, t.path,
-  t.depth + 1 as ultra_level, l.max_level
-from tree t
-cross join lim l
-where t.cnthndlr_handle in ('resource/x-bb-folder', 'resource/x-bb-lesson')
-  and t.depth + 1 > l.max_level
-order by t.course_id, t.path;
+  from tree t join course_contents c on c.parent_pk1 = t.pk1),
+deep as (
+  select t.*, l.max_level
+  from tree t
+  cross join lim l
+  where t.cnthndlr_handle in ('resource/x-bb-folder', 'resource/x-bb-lesson')
+    and t.depth + 1 >= l.max_level)
+select d.course_id, d.pk1 as content_pk, d.cnthndlr_handle, d.title, d.path,
+  d.depth + 1 as ultra_level, d.max_level,
+  coalesce(b.items_here, 0) as items_here,
+  case when d.depth + 1 >= d.max_level + 1 then 1 else 0 end as moves_one_level_more,
+  d.path || ' (' || coalesce(b.items_here, 0) || ' item(s))' as label
+from deep d
+left join lateral (
+  select count(*) as items_here
+  from course_contents u
+  where u.parent_pk1 = d.pk1 and u.cnthndlr_handle not in ('resource/x-bb-folder', 'resource/x-bb-lesson')) b on true
+order by d.course_id, d.path;
 
 
 -- ===========================================================================

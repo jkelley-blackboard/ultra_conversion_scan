@@ -183,6 +183,55 @@ def test_question_draw_note_follows_direction():
     assert "More draws" in p.checks[0]["note"]
 
 
+def test_nesting_folder_found_higher_with_contents():
+    from convscan.compare import DIFFERENT, EXPECTED, check_nesting
+    F, L = "resource/x-bb-folder", "resource/x-bb-forumlink"
+    deep = "Content / Unit 1 / Readings"   # a folder in a folder in a content area: level 3 of 3
+    row = lambda c, pk, parent, title, path, depth, h: {"course_id": c, "content_pk": pk, "parent_pk": parent,
+                                                         "title": title, "path": path, "depth": depth,
+                                                         "cnthndlr_handle": h}
+    base = {"S3d": [{"course_id": "C1", "content_pk": 3, "title": "Readings", "path": deep, "ultra_level": 3,
+                     "max_level": 3}],
+            "S3b": [row("C1", 3, 2, "Readings", deep, 2, F),
+                    row("C1", 4, 3, "Ch 1", deep + " / Ch 1", 3, L), row("C1", 5, 3, "Ch 2", deep + " / Ch 2", 3, L)]}
+    # The copy has another folder at the same path (as when a moved folder lands beside a namesake):
+    # matching by parent ID keeps their items apart.
+    moved = "ROOT / Content / Readings"
+    post = {"S3b": [row("U-C1", 93, 91, "Readings", moved, 2, F),
+                    row("U-C1", 94, 93, "Ch 1", moved + " / Ch 1", 3, L),
+                    row("U-C1", 95, 93, "Ch 2", moved + " / Ch 2", 3, L),
+                    row("U-C1", 96, 91, "Readings", moved, 2, F),
+                    row("U-C1", 97, 96, "Other", moved + " / Other", 3, L)]}
+    p = _pair(base, post)
+    check_nesting(p)
+    c = _status(p, "Folders moved up by conversion")
+    assert c["status"] == EXPECTED
+    assert c["details"][0]["ultra_path"] == "Content / Readings" and c["details"][0]["ultra_level"] == 2
+    assert c["details"][0]["items_ultra"] == 2
+    post["S3b"] = post["S3b"][:2]      # one item lost on the way
+    p = _pair(base, post)
+    check_nesting(p)
+    assert _status(p, "Folders moved up by conversion")["status"] == DIFFERENT
+
+
+def test_sums_placeholder_in_rule_text():
+    doc = {"rules": [{"id": "r", "title": "t", "source": "S3d", "severity": 2,
+                      "says": "{n} folder(s) holding {sums[items_below]} item(s)"}]}
+    rows = [{"course_id": "C1", "items_below": 12}, {"course_id": "C1", "items_below": 3}]
+    findings, _ = rules.evaluate(doc, {"S3d": rows}, "C1", {"S3d"})
+    assert findings[0]["says"] == "2 folder(s) holding 15 item(s)"
+
+
+def test_extra_text_follows_its_config_setting():
+    doc = {"rules": [{"id": "r", "title": "t", "source": "S3d", "severity": 2, "says": "Base.",
+                      "extra": {"config": "nesting_what_if", "says": "What if.", "decision": True}}]}
+    data = {"S3d": [{"course_id": "C1"}]}
+    on, _ = rules.evaluate(doc, data, "C1", {"S3d"}, {"nesting_what_if": True})
+    off, _ = rules.evaluate(doc, data, "C1", {"S3d"}, {"nesting_what_if": False})
+    assert on[0]["says"] == "Base. What if." and on[0]["decision"]
+    assert off[0]["says"] == "Base." and not off[0]["decision"]
+
+
 def test_dropped_link_types_named():
     from convscan.compare import check_content_types
     base = {"S3c": [{"course_id": "C1", "cnthndlr_handle": "resource/x-bb-toollink", "items": 2}]}

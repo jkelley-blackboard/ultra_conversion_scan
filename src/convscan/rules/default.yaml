@@ -203,13 +203,21 @@ rules:
   - id: nesting_beyond_limit
     title: Folders nested deeper than Ultra allows
     source: S3d
-    # The September sample saw over-deep folders moved up a level. Which containers count as too
-    # deep is read from demo (2026-11-15): an Original content area becomes level 1 in Ultra.
+    # An Original content area becomes level 1 in Ultra, and a container needs a level below it for
+    # its content (see S3d). Conversion testing showed each such container moved up to sit directly
+    # in its learning module with the items directly in it, nested ones coming out beside it.
     severity: 2
     known: true
-    examples: path
-    says: "{n} folder(s) or learning module(s) would sit deeper than this site's limit of {first[max_level]} levels in Ultra: {examples}. Conversion moves them up to fit, so the course's structure changes."
-    action: Check the structure in the Ultra copy, or flatten these folders in the Original before the conversion.
+    examples: label
+    says: "{n} folder(s) or learning module(s) are nested too deep for this site's {first[max_level]} levels of nested content in Ultra (a learning module, a folder, then content), holding {sums[items_here]} item(s) directly: {examples}. Conversion moves each one up to sit directly in its learning module, with those items, and a folder nested inside another comes out beside it rather than inside it, so the course's structure changes."
+    action: Check where each one lands in the Ultra copy (the hand-off report lists them), or flatten these folders in the Original before the conversion.
+    # The what-if for the additional nesting level. Turn off with nesting_what_if: false once the
+    # site's setting has been decided.
+    extra:
+      config: nesting_what_if
+      says: "With the additional nesting level (one more level; the site setting can't be undone), {sums[moves_one_level_more]} of these would still move."
+      action: Or decide on the additional nesting level first.
+      decision: true
 
   - id: undeployed_test_draws
     title: Tests that draw questions from an undeployed test

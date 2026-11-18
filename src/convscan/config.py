@@ -21,6 +21,8 @@ DEFAULTS = {
     "learner_queries": True,
     "max_replica_lag_s": 300,   # post refuses to run while the reporting database trails by more
                                 # than this (--ignore-lag overrides)
+    "nesting_what_if": True,    # the preflight says what the additional nesting level would change
+                                # (false once the site's setting has been decided)
     "rules": None,
     "templates": None,
 }

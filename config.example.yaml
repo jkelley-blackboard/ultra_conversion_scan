@@ -25,5 +25,7 @@ learner_queries: true                   # false = skip S7, S8b, S10, S12b (same 
 
 max_replica_lag_s: 300                  # post won't run while the reporting database (a read replica)
                                         # trails production by more than this; --ignore-lag overrides
-rules: null                             # path to a rule table; null = the packaged default
+nesting_what_if: true                   # the preflight says what the additional nesting level would
+                                        # change; false once the site's setting has been decided
+rules: null                            # path to a rule table; null = the packaged default
 templates: null                         # folder of .md.j2 templates; null = the packaged ones

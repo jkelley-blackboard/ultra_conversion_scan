@@ -27,7 +27,8 @@ def test_preflight_flags_the_known_risks(tmp_path):
     text = (pre / "DEMO101_preflight.md").read_text(encoding="utf-8")
     for expected in ("Release conditions that depend on groups", "Partial credit in tests that open the next step",
                      "Test attempts open now", "Grade columns hidden from learners", "Site conversion settings",
-                     "Folders nested deeper than Ultra allows", "limit of 3 levels",
+                     "Folders nested deeper than Ultra allows", "3 levels of nested content",
+                         "Further Reading (2 item(s))",
                      "Tests that draw questions from an undeployed test", "by: Module 1 Quiz"):
         assert expected in text, expected
     assert "| Blackboard LMS version | 4001.7.0-rel.4+a1cda0a |" in text

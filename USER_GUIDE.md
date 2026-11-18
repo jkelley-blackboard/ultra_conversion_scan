@@ -462,6 +462,7 @@ read from the config file's folder.
 | `statement_timeout_s` | 900 | How long one query may run before the database stops it |
 | `learner_queries` | true | false skips the per-learner queries, like `--no-learner` |
 | `max_replica_lag_s` | 300 | `post` won't run while the replica trails production by more than this |
+| `nesting_what_if` | true | The nesting finding says how many folders would still move with the additional nesting level, and marks it a decision. Set false once the site's setting has been decided. Takes effect on `render` too |
 
 ### Environment variables
 

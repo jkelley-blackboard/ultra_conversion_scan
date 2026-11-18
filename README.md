@@ -174,11 +174,16 @@ Rules live in [src/convscan/rules/default.yaml](src/convscan/rules/default.yaml)
 where they look like them.
 
 **Wording:** `says` and `action` can use `{value}` (the measure), `{n}` (rows that matched),
-`{examples}`, and `{first[col]}` (a column from the first matching row). They appear in reports for
-the institution, so keep them plain, and don't use em-dashes.
+`{examples}`, `{first[col]}` (a column from the first matching row) and `{sums[col]}` (a column's
+total over the matching rows). They appear in reports for the institution, so keep them plain, and
+don't use em-dashes.
 
 **Thresholds from config:** `threshold: {config: max_course_id_length}` takes the value from the config
 file; 0 there switches the rule off.
+
+**Text that a config setting switches:** an `extra` block (`config`, and any of `says`, `action`,
+`decision`) adds its text to the finding, and its decision flag, only while that config setting is
+true (true when the setting isn't in the config). The nesting rule's what-if uses `nesting_what_if`.
 
 A rule whose query wasn't run (for example with `--no-learner`) appears under "Not checked" in the
 report instead of passing silently.

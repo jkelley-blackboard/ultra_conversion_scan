@@ -87,6 +87,16 @@ def _side(copy: bool) -> dict[str, list[dict]]:
                 item(c2, 1, "resource/x-bb-document", "Course Overview"),
                 item(c2, 2, "resource/x-bb-asmt-test-link", "Final Test"),
                 item(c2, 3, "resource/x-bb-assignment" if not copy else "resource/x-bb-asmt-test-link", "Case Study")]
+    # The folder nested too deep (S3d), with two readings in it: a folder inside a folder in a content
+    # area. Conversion moves it up a level, whole; an Ultra copy's tree starts at a hidden ROOT
+    # (level 0), so its levels are its depths. Same depth in both: one level up, plus the ROOT.
+    deep = "ROOT / Course Content / Further Reading" if copy else "Course Content / Unit 1 / Further Reading"
+    for n, h, t, depth, path in ((7, "resource/x-bb-folder", "Further Reading", 2, deep),
+                                 (8, "resource/x-bb-document", "Reading 1", 3, deep + " / Reading 1"),
+                                 (9, "resource/x-bb-document", "Reading 2", 3, deep + " / Reading 2")):
+        d["S3b"].append({"course_id": c1, "content_pk": pk * 100 + n, "cnthndlr_handle": h, "title": t,
+                         "available_ind": "Y", "depth": depth, "path": path,
+                         "parent_title": path.rsplit(" / ", 2)[-2], "web_url": ""})
 
     gcol = lambda c, n, title, handle, content, vis="Y", calc="N": {
         "course_id": c, "col_pk": col(n), "title": title, "score_provider_handle": handle,
@@ -119,8 +129,9 @@ def _side(copy: bool) -> dict[str, list[dict]]:
     # Original only: Ultra copies have no Original folder depth to check.
     d["S3d"] = [] if copy else [
         {"course_id": c1, "content_pk": pk * 100 + 7, "cnthndlr_handle": "resource/x-bb-folder",
-         "title": "Further Reading", "path": "Course Content / Unit 1 / Week 1 / Further Reading",
-         "ultra_level": 4, "max_level": 3}]
+         "title": "Further Reading", "path": "Course Content / Unit 1 / Further Reading",
+         "ultra_level": 3, "max_level": 3, "items_here": 2, "moves_one_level_more": 0,
+         "label": "Course Content / Unit 1 / Further Reading (2 item(s))"}]
 
     # The undeployed "Question Pool" test becomes a question bank in the copy; the quiz still draws 5.
     d["S5e"] = [{"course_id": c1, "tests": 2 if copy else 3, "pools_and_banks": 1 if copy else 0,

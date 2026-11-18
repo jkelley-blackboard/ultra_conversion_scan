@@ -10,7 +10,7 @@
 |---|---|
 | Course | DEMO101 → **DEMO101-7777** (Ultra) |
 | Learners | 4 members, 2 in progress |
-| Checks | 21 same, 3 expected changes, 0 different, 4 need action, 0 not checked |
+| Checks | 21 same, 4 expected changes, 0 different, 4 need action, 0 not checked |
 | Status | **4 item(s) need action before release** |
 
 ## Needs action before release
@@ -36,6 +36,7 @@
 | Content | LTI tool links | 0 | 0 | Same |  |
 | Content | All items | 10 | 14 | Expected | Conversion adds folders. |
 | Content | Content types carried over | 5 | 5 | Same | Added by conversion: Document +2; Folder +2. |
+| Content | Folders moved up by conversion | 1 | 1 | Expected | This site allows 3 levels of nested content. Conversion moves each folder nested too deep up to sit directly in its learning module, with the items directly in it: see "Folders moved up by conversion" below for where each one is now. |
 | Content | Hidden items still hidden | 1 | 1 | Same |  |
 | Grades | Grade columns | 5 | 4 | Expected | Ultra drops the weighted total column. |
 | Groups | Groups in use | 1 | 0 | Needs action | Not carried over: Advanced Stream. Run the group repair, then re-scan. |
@@ -52,6 +53,14 @@
 | SCORM | SCORM records with the same resume state | 2 | 2 | Same | Bookmark, suspend data, status and score compared (2 from the engine's runtime record).  |
 | Learner records | Unavailable students' records | 1 learner(s), 4 record(s) | 1 learner(s), 4 record(s) | Same | Compared as totals: grade records, attempts and SCORM records. |
 | Grades | Hidden columns now visible | 1 | 1 | Needs action | Decide whether to hide, remove or keep: Placement Test |
+
+## Folders moved up by conversion
+
+These folders or learning modules were nested deeper in the Original than the site allows in Ultra. Conversion moved each one up to sit directly in its learning module, with the items directly in it; a folder that was inside another now sits beside it. Check that learners can still find them.
+
+| Original location | Level in Ultra if not moved | Ultra location | Level now | Items in it: Original | Items in it: Ultra | Result |
+|---|---|---|---|---|---|---|
+| Course Content / Unit 1 / Further Reading | 3 | Course Content / Further Reading | 2 | 2 | 2 | Moved up, items kept |
 
 ## ID map
 

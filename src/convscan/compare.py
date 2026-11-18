@@ -109,9 +109,9 @@ class Pair:
         """A plain name for a system value, or its last part if there's no label."""
         return self.labels.get(value) or str(value).rsplit("/", 1)[-1]
 
-    def add(self, area, check, original, ultra, status, note=""):
+    def add(self, area, check, original, ultra, status, note="", details=None):
         self.checks.append({"area": area, "check": check, "original": original, "ultra": ultra,
-                            "status": status, "note": note})
+                            "status": status, "note": note, "details": details or []})
 
     def both(self, label) -> bool:
         return label in self.ran_base and label in self.ran_post
@@ -222,6 +222,78 @@ def check_content_types(p: Pair):
           + ("Known loss: conversion drops " + " and ".join(x.lower() + "s" for x in dropped)
              + "; recreate the ones learners need. " if dropped else "")
           + ("Added by conversion: " + "; ".join(added) + "." if added else ""))
+
+
+_CONTAINERS = ("resource/x-bb-folder", "resource/x-bb-lesson")
+
+
+def check_nesting(p: Pair):
+    """Folders and learning modules nested too deep for the site (S3d), found again in the copy (S3b).
+    Conversion moves each one up to sit directly in its learning module, with the items directly in
+    it (a too-deep folder inside another comes out beside it), so each is compared on its direct items."""
+    if not (p.both("S3d") and p.both("S3b")):
+        return
+    rows = p.orig("S3d")
+    if not rows:
+        return
+    limit = int(rows[0].get("max_level") or 0)
+    otree, ntree = p.orig("S3b"), p.copy("S3b")
+
+    def children(tree):
+        """content_pk -> direct children. By parent ID when the scan has it; else by path and depth
+        (older runs), which can mix up two folders that share a path."""
+        kids = {}
+        if tree and "parent_pk" in tree[0]:
+            for r in tree:
+                kids.setdefault(r.get("parent_pk"), []).append(r)
+            return lambda node: kids.get(node.get("content_pk"), [])
+        return lambda node: [r for r in tree if str(r.get("path") or "").startswith(str(node.get("path")) + " / ")
+                             and int(r.get("depth") or 0) == int(node.get("depth") or 0) + 1]
+
+    o_kids, n_kids = children(otree), children(ntree)
+
+    def items(kids):
+        return sum(1 for r in kids if r.get("cnthndlr_handle") not in _CONTAINERS)
+
+    def shown(path):
+        path = str(path or "")
+        return path[len("ROOT / "):] if path.startswith("ROOT / ") else path
+
+    o_nodes = {r.get("content_pk"): r for r in otree}
+    n_folders = [r for r in ntree if _handler(r.get("cnthndlr_handle")) == "resource/x-bb-folder"]
+    details, ok = [], 0
+    for f in rows:
+        node = o_nodes.get(f.get("content_pk")) or {"content_pk": f.get("content_pk"), "path": f.get("path"),
+                                                     "depth": int(f.get("ultra_level") or 1) - 1}
+        okids = o_kids(node)
+        o_titles, o_items = {norm(r.get("title")) for r in okids}, items(okids)
+        cands = [r for r in n_folders if norm(r.get("title")) == norm(f.get("title"))]
+        # Best: most of the same direct children; then one that fits the limit; then the shallowest.
+        best = max(cands, key=lambda r: (len({norm(k.get("title")) for k in n_kids(r)} & o_titles),
+                                         int(r.get("depth") or 0) < limit, -int(r.get("depth") or 0)),
+                   default=None)
+        row = {"original_path": f.get("path"), "original_level": f.get("ultra_level"), "items_original": o_items,
+               "ultra_path": "", "ultra_level": "", "items_ultra": ""}
+        if best is None:
+            row["result"] = "Not found in the copy"
+        else:
+            # Every direct child counts on the copy side: too-deep folders come out beside it, so a
+            # folder still inside it is a converted item (a blank page becomes a folder and a document).
+            n_level, n_items = int(best.get("depth") or 0), len(n_kids(best))   # the copy's root is level 0
+            row.update(ultra_path=shown(best.get("path")), ultra_level=n_level, items_ultra=n_items)
+            if n_level >= limit:
+                row["result"] = f"Still too deep for {limit} levels"
+            elif n_items < o_items:
+                row["result"] = f"Moved up, {o_items - n_items} item(s) fewer"
+            else:
+                row["result"] = "Moved up, items kept"
+                ok += 1
+        details.append(row)
+    note = (f"This site allows {limit} levels of nested content. Conversion moves each folder nested too deep up to "
+            "sit directly in its learning module, with the items directly in it: see \"Folders moved up by "
+            "conversion\" below for where each one is now.")
+    p.add("Content", "Folders moved up by conversion", len(rows), ok,
+          EXPECTED if ok == len(rows) else DIFFERENT, note, details=details)
 
 
 def check_availability(p: Pair):
@@ -582,7 +654,7 @@ def check_hidden_columns(p: Pair):
               "Decide whether to hide, remove or keep: " + _list(shown))
 
 
-CHECKS = (check_copy_task, check_members, check_content_counts, check_content_types, check_availability,
+CHECKS = (check_copy_task, check_members, check_content_counts, check_content_types, check_nesting, check_availability,
           check_grade_columns, check_groups, check_release_conditions, check_partial_credit,
           check_question_sources, check_question_types, check_test_exceptions, check_work_in_progress,
           check_learner_records, check_scorm, check_inactive_records, check_hidden_columns)

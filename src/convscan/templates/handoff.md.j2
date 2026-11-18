@@ -36,6 +36,19 @@
 | {{ k.area }} | {{ k.check }} | {{ k.original | n }} | {{ k.ultra | n }} | {{ result[k.status] }} | {{ k.note | replace("|", "/") }} |
 {% endfor %}
 
+{% set moved = checks | selectattr("check", "equalto", "Folders moved up by conversion") | list %}
+{% if moved and moved[0].details %}
+## Folders moved up by conversion
+
+These folders or learning modules were nested deeper in the Original than the site allows in Ultra. Conversion moved each one up to sit directly in its learning module, with the items directly in it; a folder that was inside another now sits beside it. Check that learners can still find them.
+
+| Original location | Level in Ultra if not moved | Ultra location | Level now | Items in it: Original | Items in it: Ultra | Result |
+|---|---|---|---|---|---|---|
+{% for d in moved[0].details %}
+| {{ d.original_path | replace("|", "/") }} | {{ d.original_level }} | {{ d.ultra_path | replace("|", "/") }} | {{ d.ultra_level }} | {{ d.items_original }} | {{ d.items_ultra }} | {{ d.result }} |
+{% endfor %}
+
+{% endif %}
 ## ID map
 
 Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`.

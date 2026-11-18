@@ -84,6 +84,16 @@ class _Safe(dict):
         return "{" + key + "}"
 
 
+class _Sums:
+    """{sums[column]} in a rule's text: the column's total over the rule's rows."""
+    def __init__(self, rows):
+        self.rows = rows
+
+    def __getitem__(self, col):
+        total = measure(self.rows, f"sum({col})")
+        return int(total) if float(total).is_integer() else total
+
+
 def evaluate(doc: dict, data: dict[str, list[dict]], course_id: str, ran: set[str],
              cfg: dict | None = None) -> tuple[list[dict], list[dict]]:
     """Return (findings, not_checked) for one course.
@@ -115,14 +125,21 @@ def evaluate(doc: dict, data: dict[str, list[dict]], course_id: str, ran: set[st
                 if v not in (None, "") and v not in seen:
                     seen.append(v)
             examples = "; ".join(map(str, seen[:5])) + (f" (and {len(seen) - 5} more)" if len(seen) > 5 else "")
-        fmt = _Safe(value=value, n=len(rows), examples=examples or "none listed", first=rows[0] if rows else {})
+        fmt = _Safe(value=value, n=len(rows), examples=examples or "none listed", first=rows[0] if rows else {},
+                    sums=_Sums(rows))
         sev = rule["severity"]
+        says, action, decision = (rule.get("says", "").format_map(fmt).strip(),
+                                  rule.get("action", "").format_map(fmt).strip(), rule.get("decision", False))
+        # extra: more text (and optionally a decision) shown only while a config setting is on.
+        extra = rule.get("extra")
+        if extra and (cfg or {}).get(extra["config"], True):
+            says = (says + " " + extra.get("says", "").format_map(fmt).strip()).strip()
+            action = (action + " " + extra.get("action", "").format_map(fmt).strip()).strip()
+            decision = decision or extra.get("decision", False)
         findings.append({
             "id": rule["id"], "title": rule["title"], "severity": sev, "severity_label": SEVERITY[sev],
             "known": rule.get("known", False), "value": value, "n": len(rows),
-            "says": rule.get("says", "").format_map(fmt).strip(),
-            "action": rule.get("action", "").format_map(fmt).strip(),
-            "decision": rule.get("decision", False),
+            "says": says, "action": action, "decision": decision,
         })
     findings.sort(key=lambda f: (SEVERITY_ORDER[f["severity"]], f["id"]))
     return findings, not_checked
