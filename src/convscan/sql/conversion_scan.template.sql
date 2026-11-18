@@ -77,6 +77,7 @@ with need(t, c) as (values
  ('system_registry','registry_key'),('system_registry','registry_value'),('user_test_option','course_users_pk1'),('user_test_option','groups_pk1'),
  ('scormpackage','api_course_id'),('scormregistration','api_registration_id'),('scormregistration','suspended_activity_id'),('scormregistration','runtime_data'),
  ('scormactivity','scorm_registration_id'),('scormactivityrt','location'),('scormactivityrt','suspend_data'),
+ ('scormregistration','engine_tenant_id'),('scormactivity','engine_tenant_id'),('scormactivityrt','engine_tenant_id'),
  ('scormbbpackageinfo','max_attempts'),('scormbbgradebookinfo','gradebook_column_id'),('scormpackageproperties','time_limit'),
  ('conference_main','crsmain_pk1'),('forum_main','confmain_pk1'),('msg_main','forummain_pk1'),
  ('queued_tasks','task_type'),('queued_tasks','status'),('queued_tasks','course_main_pk1'),('queued_tasks','results'))
@@ -693,6 +694,10 @@ order by s.course_id, cc.title, ar.title, ac.crit_type;
 --      Learners are matched by users_pk1 taken from api_registration_id
 --      ('<content_id>-<user_id>'). Same learner filter as S7, applied in reg so that no other
 --      learner's registration (or its runtime_data blob) is read.
+--      Each registration's activities are read through a lateral lookup on the engine's indexes,
+--      which all start with engine_tenant_id: joining on the registration and activity IDs alone
+--      scans both activity tables in full for every scan (about 45 s on a large site, whatever
+--      the scope; a 10-course batch went from 44 s to under 10 s).
 -- ===========================================================================
 with scope as ({SCOPE}),
 pkg as (
@@ -702,25 +707,30 @@ pkg as (
   join scormpackage p     on p.api_course_id = '_' || cc.pk1 || '_1'),
 reg as (
   select pkg.course_id, pkg.content_pk, pkg.scorm_title, cu.users_pk1, cu.available_ind,
-         r.scorm_registration_id, r.instance_id, r.completed_dt_utc, r.suspended_activity_id, r.runtime_data
+         r.engine_tenant_id, r.scorm_registration_id, r.instance_id, r.completed_dt_utc,
+         r.suspended_activity_id, r.runtime_data
   from pkg
   join scormregistration r on r.scorm_package_id = pkg.scorm_package_id
   join course_users cu     on cu.crsmain_pk1 = pkg.crs_pk
                           and '_' || cu.users_pk1 || '_1' = split_part(r.api_registration_id, '-', 2)
                           and cu.role = 'S' and cu.row_status = 0 {LEARNERS}),
 rt as (
-  select a.scorm_registration_id,
-         count(*)                                                                     as scos,
-         count(*) filter (where rt.location is not null and rt.location <> '')         as scos_with_location,
-         count(*) filter (where rt.suspend_data is not null and rt.suspend_data <> '') as scos_with_suspend,
-         md5(string_agg(coalesce(rt.location, '') || '|' || coalesce(rt.suspend_data, '')
-                        || coalesce(rt.suspend_data_overflow, '') || '|' || coalesce(rt.completion_status::text, '')
-                        || '|' || coalesce(rt.success_status::text, '') || '|' || coalesce(rt.score_raw::text, ''),
-                        '#' order by a.scorm_activity_id))                            as runtime_md5
+  -- A registration with no activity rows yet gets no rt row, so its scos stay NULL below.
+  select reg.scorm_registration_id, x.scos, x.scos_with_location, x.scos_with_suspend, x.runtime_md5
   from reg
-  join scormactivity a    on a.scorm_registration_id = reg.scorm_registration_id
-  join scormactivityrt rt on rt.scorm_activity_id = a.scorm_activity_id
-  group by a.scorm_registration_id)
+  cross join lateral (
+    select count(*)                                                                     as scos,
+           count(*) filter (where rt.location is not null and rt.location <> '')         as scos_with_location,
+           count(*) filter (where rt.suspend_data is not null and rt.suspend_data <> '') as scos_with_suspend,
+           md5(string_agg(coalesce(rt.location, '') || '|' || coalesce(rt.suspend_data, '')
+                          || coalesce(rt.suspend_data_overflow, '') || '|' || coalesce(rt.completion_status::text, '')
+                          || '|' || coalesce(rt.success_status::text, '') || '|' || coalesce(rt.score_raw::text, ''),
+                          '#' order by a.scorm_activity_id))                            as runtime_md5
+    from scormactivity a
+    join scormactivityrt rt on rt.engine_tenant_id = a.engine_tenant_id and rt.scorm_activity_id = a.scorm_activity_id
+    where a.engine_tenant_id = reg.engine_tenant_id
+      and a.scorm_registration_id = reg.scorm_registration_id) x
+  where x.scos > 0)
 select reg.course_id, reg.users_pk1, reg.available_ind as learner_available, reg.content_pk, reg.scorm_title,
   reg.instance_id + 1                      as attempt_no,
   reg.completed_dt_utc,
