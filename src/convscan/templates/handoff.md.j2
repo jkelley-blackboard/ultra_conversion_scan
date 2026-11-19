@@ -6,7 +6,7 @@
 
 **Prepared for:** {{ cfg.prepared_for }} | **Post-scan:** {{ run.finished[:10] }} | **Baseline:** {{ base_run.finished[:10] }} | **Batch:** {{ run.name }}
 
-> Generated from the LMS reporting database by convscan {{ version }}, by comparing the Ultra copy with the Original as scanned before conversion. Where each value comes from (`table.field`): the key at the end of [batch_summary.md](batch_summary.md#where-each-value-comes-from).
+> Generated from the LMS reporting database by convscan {{ version }}, by comparing the Ultra copy with the Original as scanned before conversion. Where each value comes from (`table.field`): [REPORT_KEY.md](REPORT_KEY.md).
 {% if run.replica_lag is defined %}
 > Reporting database at the time of the scan: {{ run.replica_lag.note }}.{% if run.replica_lag.lag_s is none %} Check that the copy looks complete before relying on any losses below.{% elif run.replica_lag.lag_s > cfg.max_replica_lag_s %} The scan ran anyway, so losses below may be changes not yet copied to it: scan again before acting on them.{% endif %}
 
@@ -16,7 +16,9 @@
 
 | | |
 |---|---|
-| Course | {{ c.course_id }} → **{{ c.new_course_id }}** (Ultra) |
+| Course ID (`course_main.course_id`) | {{ c.course_id }} → **{{ c.new_course_id }}** (Ultra) |
+| External ID (`course_main.batch_uid`) | {% if c.batch_uid or c.new_batch_uid %}{{ c.batch_uid or "not read" }} → {{ c.new_batch_uid or "not read" }}{% else %}not read in this scan{% endif %} |
+| Course primary key (`course_main.pk1`) | {{ c.crs_pk or "" }} → {{ c.new_crs_pk or "" }} |
 | Learners | {{ c.members | n }} members, {{ c.in_progress | n }} in progress |
 | Checks | {{ statuses["same"] }} same, {{ statuses["expected"] }} expected changes, {{ statuses["expected fix"] }} expected but should fix, {{ statuses["different"] }} different, {{ statuses["action"] }} need action, {{ statuses["not checked"] }} not checked |
 | Status | {% if actions %}**{{ actions | length }} item(s) need action before release**{% elif different %}**Review {{ different | length }} difference(s) before release**{% else %}**Ready to verify and release**{% endif %}{% if improvements %}; {{ improvements | length }} item(s) to fix after release, which don't hold it up{% endif %} |
@@ -62,15 +64,15 @@ These folders or learning modules were nested deeper in the Original than the si
 {% endif %}
 ## ID map
 
-Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`.
+Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`. The course row's IDs are `course_main.pk1`. A grade column's IDs are `gradebook_main.pk1`, the grade column ID; its attached item, the test or SCORM package in the course, has its own content ID, `course_contents.pk1`.
 
-| Kind | Original ID | Ultra ID | Title | Attached item | Match |
-|---|---|---|---|---|---|
+| Kind | Original ID | Ultra ID | Title | Attached item | Item content ID: Original | Item content ID: Ultra | Match |
+|---|---|---|---|---|---|---|---|
 {% for r in idmap[:25] %}
-| {{ r.kind }} | {{ r.orig_id }} | {{ r.new_id }} | {{ r.title | replace("|", "/") }} | {{ r.attached_item | replace("|", "/") }} | {{ r.match_status }} |
+| {{ r.kind }} | {{ r.orig_id }} | {{ r.new_id }} | {{ r.title | replace("|", "/") }} | {{ r.attached_item | replace("|", "/") }} | {{ r.orig_content_pk1 }} | {{ r.new_content_pk1 }} | {{ r.match_status }} |
 {% endfor %}
 {% if idmap | length > 25 %}
-| | | | ({{ idmap | length - 25 }} more rows in idmap.csv) | | |
+| | | | ({{ idmap | length - 25 }} more rows in idmap.csv) | | | | |
 {% endif %}
 
 {% if map_counts %}

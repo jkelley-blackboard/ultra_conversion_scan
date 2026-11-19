@@ -2,13 +2,15 @@
 
 **Prepared for:** Sample University | **Post-scan:** 2026-12-01 | **Baseline:** 2026-11-30 | **Batch:** sample_post
 
-> Generated from the LMS reporting database by convscan 0.3.0, by comparing the Ultra copy with the Original as scanned before conversion. Where each value comes from (`table.field`): the key at the end of [batch_summary.md](batch_summary.md#where-each-value-comes-from).
+> Generated from the LMS reporting database by convscan 0.3.0, by comparing the Ultra copy with the Original as scanned before conversion. Where each value comes from (`table.field`): [REPORT_KEY.md](REPORT_KEY.md).
 
 ## Summary
 
 | | |
 |---|---|
-| Course | DEMO102 → **DEMO102-7777** (Ultra) |
+| Course ID (`course_main.course_id`) | DEMO102 → **DEMO102-7777** (Ultra) |
+| External ID (`course_main.batch_uid`) | DEMO102 → DEMO102-7777 |
+| Course primary key (`course_main.pk1`) | 102 → 902 |
 | Learners | 4 members, 2 in progress |
 | Checks | 25 same, 1 expected changes, 0 expected but should fix, 0 different, 0 need action, 0 not checked |
 | Status | **Ready to verify and release** |
@@ -46,13 +48,13 @@
 
 ## ID map
 
-Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`.
+Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`. The course row's IDs are `course_main.pk1`. A grade column's IDs are `gradebook_main.pk1`, the grade column ID; its attached item, the test or SCORM package in the course, has its own content ID, `course_contents.pk1`.
 
-| Kind | Original ID | Ultra ID | Title | Attached item | Match |
-|---|---|---|---|---|---|
-| course | _102_1 | _902_1 | Ethics in Practice |  | matched |
-| grade column | _1012_1 | _9012_1 | Final Test | Final Test | matched |
-| grade column | _1013_1 | _9013_1 | Case Study | Case Study | matched |
+| Kind | Original ID | Ultra ID | Title | Attached item | Item content ID: Original | Item content ID: Ultra | Match |
+|---|---|---|---|---|---|---|---|
+| course | _102_1 | _902_1 | Ethics in Practice |  |  |  | matched |
+| grade column | _1012_1 | _9012_1 | Final Test | Final Test | 10012 | 90012 | matched |
+| grade column | _1013_1 | _9013_1 | Case Study | Case Study | 10013 | 90013 | matched |
 
 Grade columns by match: matched 2. An ambiguous or not-found column is resolved before hand-off; columns new in Ultra can be ignored.
 

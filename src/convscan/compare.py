@@ -23,7 +23,7 @@ S7_FIELDS = ("attempts", "submitted", "open", "needs_grading", "highest_attempt_
 _TYPO = str.maketrans({"–": "-", "—": "-", "‘": "'", "’": "'", "“": '"', "”": '"'})
 
 # Ultra keeps one overall grade, so the Original's weighted total has no counterpart.
-_WEIGHTED = re.compile(r"weighted ?total|OutcomeDefinition\.WeightedTotal", re.I)
+_WEIGHTED = re.compile(r"weighted ?total|total pond[ée]r[ée]|OutcomeDefinition\.WeightedTotal", re.I)
 # The Original's default Total column. Conversion keeps it as a calculated "Total" when the course has
 # graded items, and removes it when there is nothing to total.
 _DEFAULT_TOTAL = re.compile(r"^(OutcomeDefinition\.Total\.title|total)$", re.I)
@@ -787,11 +787,24 @@ def compare_course(o: str, n: str, base: dict, post: dict, ran_base: set, ran_po
 
 
 def id_map(o: str, n: str, base: dict, post: dict) -> list[dict]:
-    """The course row, every Original column with its match, and columns that exist only in Ultra."""
-    o_pk, n_pk = _one(base, "S1", o).get("crs_pk"), _one(post, "S1", n).get("crs_pk")
+    """The course row, every Original column with its match, and columns that exist only in Ultra.
+    A course row's IDs are course_main.pk1, with course_main.batch_uid beside them; a grade column
+    row's IDs are gradebook_main.pk1, with the attached item's course_contents.pk1 beside them."""
+    o_s1, n_s1 = _one(base, "S1", o), _one(post, "S1", n)
+    o_pk, n_pk = o_s1.get("crs_pk"), n_s1.get("crs_pk")
+    # Grade column pk -> its attached item's content pk, on each side (S4).
+    o_item = {str(r["col_pk"]): r.get("content_pk") for r in _rows(base, "S4", o)}
+    n_item = {str(r["col_pk"]): r.get("content_pk") for r in _rows(post, "S4", n)}
+
+    def item(side, col_pk):
+        v = side.get(str(col_pk)) if col_pk not in (None, "") else None
+        return "" if v in (None, "") else v
+
     rows = [{"orig_course_id": o, "new_course_id": n, "orig_id": _ext(o_pk), "new_id": _ext(n_pk),
              "orig_pk1": o_pk or "", "new_pk1": n_pk or "", "id_table": "course_main",
-             "kind": "course", "title": _one(base, "S1", o).get("course_name", ""), "attached_item": "",
+             "orig_batch_uid": o_s1.get("batch_uid") or "", "new_batch_uid": n_s1.get("batch_uid") or "",
+             "orig_content_pk1": "", "new_content_pk1": "",
+             "kind": "course", "title": o_s1.get("course_name", ""), "attached_item": "",
              "match_status": "matched" if n_pk else "not found"}]
     mapped = set()
     for m in sorted(column_map(post, o).values(), key=lambda r: r["orig_col_pk"]):
@@ -804,12 +817,18 @@ def id_map(o: str, n: str, base: dict, post: dict) -> list[dict]:
         rows.append({"orig_course_id": o, "new_course_id": n, "orig_id": _ext(m["orig_col_pk"]),
                      "new_id": _ext(m.get("new_col_pk")), "orig_pk1": m["orig_col_pk"],
                      "new_pk1": m.get("new_col_pk") or "", "id_table": "gradebook_main",
+                     "orig_batch_uid": "", "new_batch_uid": "",
+                     "orig_content_pk1": item(o_item, m["orig_col_pk"]),
+                     "new_content_pk1": item(n_item, m.get("new_col_pk")),
                      "kind": "grade column", "title": m.get("title", ""),
-                     "attached_item": m.get("content_title") or "", "match_status": status})
+                     "attached_item": re.sub(r"<[^>]*>", "", m.get("content_title") or ""), "match_status": status})
     for r in _rows(post, "S4", n):
         if r["col_pk"] not in mapped:
             rows.append({"orig_course_id": o, "new_course_id": n, "orig_id": "", "new_id": _ext(r["col_pk"]),
                          "orig_pk1": "", "new_pk1": r["col_pk"], "id_table": "gradebook_main",
+                         "orig_batch_uid": "", "new_batch_uid": "",
+                         "orig_content_pk1": "", "new_content_pk1": item(n_item, r["col_pk"]),
                          "kind": "grade column", "title": r.get("title", ""),
-                         "attached_item": r.get("content_title") or "", "match_status": "new in Ultra"})
+                         "attached_item": re.sub(r"<[^>]*>", "", r.get("content_title") or ""),
+                         "match_status": "new in Ultra"})
     return rows

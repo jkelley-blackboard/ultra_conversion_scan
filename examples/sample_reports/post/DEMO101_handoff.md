@@ -2,13 +2,15 @@
 
 **Prepared for:** Sample University | **Post-scan:** 2026-12-01 | **Baseline:** 2026-11-30 | **Batch:** sample_post
 
-> Generated from the LMS reporting database by convscan 0.3.0, by comparing the Ultra copy with the Original as scanned before conversion. Where each value comes from (`table.field`): the key at the end of [batch_summary.md](batch_summary.md#where-each-value-comes-from).
+> Generated from the LMS reporting database by convscan 0.3.0, by comparing the Ultra copy with the Original as scanned before conversion. Where each value comes from (`table.field`): [REPORT_KEY.md](REPORT_KEY.md).
 
 ## Summary
 
 | | |
 |---|---|
-| Course | DEMO101 → **DEMO101-7777** (Ultra) |
+| Course ID (`course_main.course_id`) | DEMO101 → **DEMO101-7777** (Ultra) |
+| External ID (`course_main.batch_uid`) | DEMO101 → DEMO101-7777 |
+| Course primary key (`course_main.pk1`) | 101 → 901 |
 | Learners | 4 members, 2 in progress |
 | Checks | 21 same, 3 expected changes, 1 expected but should fix, 0 different, 4 need action, 0 not checked |
 | Status | **4 item(s) need action before release**; 1 item(s) to fix after release, which don't hold it up |
@@ -70,16 +72,16 @@ These folders or learning modules were nested deeper in the Original than the si
 
 ## ID map
 
-Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`.
+Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`. The course row's IDs are `course_main.pk1`. A grade column's IDs are `gradebook_main.pk1`, the grade column ID; its attached item, the test or SCORM package in the course, has its own content ID, `course_contents.pk1`.
 
-| Kind | Original ID | Ultra ID | Title | Attached item | Match |
-|---|---|---|---|---|---|
-| course | _101_1 | _901_1 | Introduction to Portfolio Management |  | matched |
-| grade column | _1002_1 | _9002_1 | Module 1 Quiz | Module 1 Quiz | matched |
-| grade column | _1003_1 | _9003_1 | Placement Test | Placement Test | matched |
-| grade column | _1006_1 | _9006_1 | Module 1 Interactive | Module 1 Interactive | matched |
-| grade column | _1008_1 |  | Weighted Total |  | removed in Ultra (weighted total) |
-| grade column | _1009_1 | _9009_1 | Total |  | matched |
+| Kind | Original ID | Ultra ID | Title | Attached item | Item content ID: Original | Item content ID: Ultra | Match |
+|---|---|---|---|---|---|---|---|
+| course | _101_1 | _901_1 | Introduction to Portfolio Management |  |  |  | matched |
+| grade column | _1002_1 | _9002_1 | Module 1 Quiz | Module 1 Quiz | 10002 | 90002 | matched |
+| grade column | _1003_1 | _9003_1 | Placement Test | Placement Test | 10003 | 90003 | matched |
+| grade column | _1006_1 | _9006_1 | Module 1 Interactive | Module 1 Interactive | 10006 | 90006 | matched |
+| grade column | _1008_1 |  | Weighted Total |  |  |  | removed in Ultra (weighted total) |
+| grade column | _1009_1 | _9009_1 | Total |  |  |  | matched |
 
 Grade columns by match: matched 4, removed in Ultra (weighted total) 1. An ambiguous or not-found column is resolved before hand-off; columns new in Ultra can be ignored.
 

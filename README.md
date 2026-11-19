@@ -95,7 +95,7 @@ a row per learner and are the large ones. S7, S8b and S10 read only students in 
 | Label | What it reads |
 |---|---|
 | S0 | Every table and column the queries use (`convscan check`) |
-| S1 | Course identity, availability, and whether the new ID is free |
+| S1 | Course identity (course ID, primary key, external ID `batch_uid`), availability, and whether the new ID is free |
 | S2 | Members: staff, students in progress, completed and disabled, recent access |
 | S2b | Totals for unavailable and disabled students: learners, grade records, attempts, SCORM records |
 | S3 | Content counts: tests, assignments, SCORM, discussions, LTI, hidden and dated items, Content Collection links |
@@ -199,7 +199,7 @@ counts only.
 |---|---|---|
 | Reports, batch summary | `reports/` | Counts only. Titles of courses, items, columns and groups appear; group names are whatever the course author typed |
 | `idmap.csv` | `reports/` | Nothing: course and grade column IDs, in text form (`_1002_1`) and as plain `pk1` numbers with their table |
-| The key, at the end of `batch_summary.md` | `reports/` | Nothing: where each value in that batch's reports comes from, as `table.field`, for the run type (pre or post). Template: [report_key.md.j2](src/convscan/templates/report_key.md.j2) |
+| `REPORT_KEY.md` | `reports/` | Nothing: where each value in that batch's reports comes from, as `table.field`, with the sections for the run type (pre or post). Share it with the reports. Template: [report_key.md.j2](src/convscan/templates/report_key.md.j2) |
 | `run.json` | Run folder | Nothing: courses, settings, row counts, timings, replica lag |
 | S7, S8b, S10, S12b, and S9's named users | `data/*.csv` | One row per learner by internal key: grades, attempts, group, test exceptions, SCORM location. S7, S8b and S10 cover students in progress only, unless `--all-learners` |
 | S2b | `data/*.csv` | Totals per course for unavailable and disabled students: no one's records |

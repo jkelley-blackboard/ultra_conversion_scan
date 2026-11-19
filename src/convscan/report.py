@@ -25,6 +25,7 @@ def course_facts(data: dict, cid: str) -> dict:
     return {
         "course_id": cid,
         "course_name": s1.get("course_name", ""),
+        "crs_pk": s1.get("crs_pk"), "batch_uid": s1.get("batch_uid"),
         "available": {"Y": "Yes", "N": "No"}.get(s1.get("available_ind"), s1.get("available_ind", "")),
         "new_course_id": s1.get("expected_new_course_id", ""),
         "members": s2.get("members"), "staff": s2.get("staff"), "students": s2.get("students"),
@@ -117,7 +118,7 @@ def render_pre(run_dir: pathlib.Path, run: dict, data: dict, cfg: dict,
     path = out / "batch_summary.md"
     path.write_text(env.get_template("batch_summary.md.j2").render(mode="pre", courses=summary, **common),
                     encoding="utf-8")
-    return written + [path]
+    return written + [path, _write_key(env, out, "pre", common)]
 
 
 def render_post(run_dir: pathlib.Path, run: dict, data: dict, base_run: dict, base: dict,
@@ -137,7 +138,8 @@ def render_post(run_dir: pathlib.Path, run: dict, data: dict, base_run: dict, ba
         all_map += idmap
         all_diffs += diffs
         facts = course_facts(base, o)
-        facts["new_course_id"] = n
+        copy_s1 = _one(data, "S1", n)
+        facts.update(new_course_id=n, new_crs_pk=copy_s1.get("crs_pk"), new_batch_uid=copy_s1.get("batch_uid"))
         statuses = {s: sum(1 for c in checks if c["status"] == s) for s in compare.STATUSES}
         map_counts = {}
         for r in idmap:
@@ -151,13 +153,22 @@ def render_post(run_dir: pathlib.Path, run: dict, data: dict, base_run: dict, ba
         summary.append({"c": facts, "statuses": statuses, "report": path.name})
     _write_csv(out / "idmap.csv", all_map,
                ["orig_course_id", "new_course_id", "kind", "orig_id", "new_id", "title", "attached_item", "match_status",
-                "id_table", "orig_pk1", "new_pk1"])
+                "id_table", "orig_pk1", "new_pk1", "orig_batch_uid", "new_batch_uid",
+                "orig_content_pk1", "new_content_pk1"])
     _write_csv(run_dir / "data" / "diff_learner_records.csv", all_diffs,
                ["course_id", "users_pk1", "orig_col_pk", "new_col_pk", "field", "original", "copy"])
     path = out / "batch_summary.md"
     path.write_text(env.get_template("batch_summary.md.j2").render(mode="post", courses=summary, **common),
                     encoding="utf-8")
-    return written + [out / "idmap.csv", path]
+    return written + [out / "idmap.csv", path, _write_key(env, out, "post", common)]
+
+
+def _write_key(env: jinja2.Environment, out: pathlib.Path, mode: str, common: dict) -> pathlib.Path:
+    """REPORT_KEY.md: where each value in this batch's reports comes from (table.field), with the
+    sections for the run type only."""
+    path = out / "REPORT_KEY.md"
+    path.write_text(env.get_template("report_key.md.j2").render(mode=mode, **common), encoding="utf-8")
+    return path
 
 
 def _write_csv(path: pathlib.Path, rows: list[dict], cols: list[str]):

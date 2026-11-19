@@ -57,7 +57,7 @@
 --     LMS release. Returns only what is MISSING; zero rows means the kit should run.
 -- ===========================================================================
 with need(t, c) as (values
- ('course_main','course_id'),('course_main','ultra_status'),('course_main','available_ind'),('course_main','row_status'),
+ ('course_main','course_id'),('course_main','batch_uid'),('course_main','ultra_status'),('course_main','available_ind'),('course_main','row_status'),
  ('course_users','role'),('course_users','available_ind'),('course_users','last_access_date'),('course_users','row_status'),
  ('course_contents','cnthndlr_handle'),('course_contents','available_ind'),('course_contents','main_data'),('course_contents','web_url'),
  ('course_contents','parent_pk1'),('course_contents_files','course_contents_pk1'),
@@ -90,12 +90,14 @@ order by 1, 2;
 
 
 -- ===========================================================================
--- S1. Course identity and status, with the expected new course ID
+-- S1. Course identity and status, with the expected new course ID. batch_uid is the external
+--     ID that integrations and the REST API's externalId: lookups use (after copy and convert, the
+--     copy's batch_uid is its new course ID).
 --     new_id_taken counts disabled courses too (an earlier test copy left disabled is
 --     still a clash).
 -- ===========================================================================
 with scope as ({SCOPE})
-select s.course_id, cm.pk1 as crs_pk, cm.course_name, cm.ultra_status, cm.available_ind, cm.row_status,
+select s.course_id, cm.pk1 as crs_pk, cm.batch_uid, cm.course_name, cm.ultra_status, cm.available_ind, cm.row_status,
   cm.dtcreated, cm.dtmodified,
   '{PREFIX}' || s.course_id || '{SUFFIX}'                       as expected_new_course_id,
   length('{PREFIX}' || s.course_id || '{SUFFIX}')               as new_id_length,

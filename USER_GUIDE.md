@@ -325,7 +325,10 @@ Conversion gives every course and grade column a new ID. Systems outside the LMS
 Original course and grade column ID beside its Ultra counterpart, with how it was matched. Each ID
 is given twice: in text form (`orig_id`, `new_id`, for example `_1002_1`) and as the plain primary key
 (`orig_pk1`, `new_pk1`, for example `1002`), with the table it's from (`id_table`: `course_main` or
-`gradebook_main`). The key at the end of `batch_summary.md` explains every column.
+`gradebook_main`). A grade column ID (`gradebook_main.pk1`) isn't the ID of the test or SCORM package
+it belongs to: that item has its own content ID (`course_contents.pk1`), given in `orig_content_pk1` and
+`new_content_pk1`. The course row also carries each course's external ID (`orig_batch_uid`,
+`new_batch_uid`). `REPORT_KEY.md` in the reports folder explains every column.
 
 | Status | Meaning |
 |---|---|
@@ -351,7 +354,8 @@ Each run writes two folders:
   data/        one CSV per query: grade, attempt and SCORM records by internal key
 
 ~/convscan/reports/batch01_post/    reports_dir: what gets shared
-  *_handoff.md, batch_summary.md (ends with the key: where each value comes from), idmap.csv
+  *_handoff.md, batch_summary.md, idmap.csv
+  REPORT_KEY.md  where each value comes from (table.field); share it with the reports
   run.json     a copy, so a report can be traced to its run (no learner data in it)
 ```
 

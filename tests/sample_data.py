@@ -31,7 +31,7 @@ SETTINGS = [
 
 
 def _course(cid, crs_pk, name, suffix_id, taken=False, available="N"):
-    return {"course_id": cid, "crs_pk": crs_pk, "course_name": name, "ultra_status": "C",
+    return {"course_id": cid, "crs_pk": crs_pk, "batch_uid": cid, "course_name": name, "ultra_status": "C",
             "available_ind": available, "row_status": 0, "expected_new_course_id": suffix_id,
             "new_id_length": len(suffix_id), "new_id_taken": "true" if taken else "false"}
 

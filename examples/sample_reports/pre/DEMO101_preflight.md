@@ -2,7 +2,7 @@
 
 **Prepared for:** Sample University | **Scan:** 2026-11-30 | **Batch:** sample_pre
 
-> Generated from the LMS reporting database by convscan 0.3.0. Figures are as of the scan. Severity: 1 blocks learners, 2 needs fixing, 3 improves the experience, 0 to check by hand. Where each value comes from (`table.field`): the key at the end of [batch_summary.md](batch_summary.md#where-each-value-comes-from).
+> Generated from the LMS reporting database by convscan 0.3.0. Figures are as of the scan. Severity: 1 blocks learners, 2 needs fixing, 3 improves the experience, 0 to check by hand. Where each value comes from (`table.field`): [REPORT_KEY.md](REPORT_KEY.md).
 
 ## In short
 
@@ -17,6 +17,8 @@
 
 | | |
 |---|---|
+| Course primary key (`course_main.pk1`) | 101 |
+| External ID (`course_main.batch_uid`) | DEMO101 |
 | New course ID | DEMO101-7777 |
 | Available to learners now | No |
 | Members | 4 (1 staff, 3 students) |

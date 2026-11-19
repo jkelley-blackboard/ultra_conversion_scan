@@ -1,0 +1,206 @@
+# Report Key: sample_post
+
+**Where each value comes from.** This key goes with the hand-off reports and `idmap.csv` in this folder. It gives the database table and field behind each value, written as `table.field`.
+
+The tables are in the Blackboard LMS reporting database, read through Direct Data Access (DDA). Each value comes from one query in the SQL kit (`conversion_scan.template.sql`), named by its label (S1, S2 and so on), so you can run the same query yourself. Every query is read-only.
+
+## IDs
+
+**Primary keys.** Every table has a numeric primary key, its `pk1` field. Blackboard LMS shows it in the REST API and in browser addresses as text: an underscore, the number, then `_1`. So `_1002_1` in a report is the row whose `pk1` is 1002. The number is what the database stores; the `_1` is part of the text form only.
+
+There are three kinds of primary key in these reports. Each belongs to a different table, and the same number in two tables means two different things:
+
+| ID | Field | What it identifies | Where it appears |
+|---|---|---|---|
+| **Course primary key** | `course_main.pk1` | The course | The course table, and the course row of the ID map (`_101_1`) |
+| **Grade column ID** | `gradebook_main.pk1` | A column in the Grade Center or gradebook: what scores are recorded against, and what an outside system reads grades from | Grade column rows of the ID map (`orig_id`, `new_id`, `orig_pk1`, `new_pk1`) |
+| **Content ID** | `course_contents.pk1` | An item in the course: a test link, SCORM package, assignment, folder or document | The ID map's `orig_content_pk1` and `new_content_pk1`, and `content_pk` in the data files |
+
+A grade column and its item are linked by `gradebook_main.course_contents_pk1`, which holds the item's content ID. Columns with no item (totals, calculated columns, columns made by hand) have no content ID. A test has a third ID of its own, `qti_asi_data.pk1` (`gradebook_main.qti_asi_data_pk1`), which the reports don't show.
+
+Conversion gives every course, grade column and item a new primary key, so each Original ID has a different Ultra ID.
+
+**Course ID.** The readable ID, such as `DEMO101`, is `course_main.course_id`. The copy's course ID is the prefix, the Original's course ID, then the suffix (for example `DEMO101-7777`), as set in the run's configuration.
+
+**External ID.** `course_main.batch_uid` is the ID that integrations, SIS feeds and the REST API's `externalId:` lookups use. Both reports show it. After copy and convert, the copy's external ID is the same as its new course ID, until an integration changes it.
+
+**Learners.** Learners appear only as `users_pk1` (`users.pk1`, the same in the Original and the copy) or `course_users.pk1` (the enrollment), never by name, username or email.
+
+**In the REST API.** The Blackboard LMS REST API names the same values differently. A course has three IDs:
+
+| REST field | Database field | Form | Example |
+|---|---|---|---|
+| Course `id` | `course_main.pk1` (the course primary key) | `_1234_1` | `_101_1` |
+| Course `courseId` | `course_main.course_id` | As stored | `DEMO101` |
+| Course `externalId` | `course_main.batch_uid` | As stored | `DEMO101` |
+| Grade column `id` | `gradebook_main.pk1` (the grade column ID) | `_1234_1` | `_1002_1` |
+| Grade column `contentId` | `gradebook_main.course_contents_pk1` (the item's content ID) | `_1234_1` | |
+| Content `id` | `course_contents.pk1` (the content ID) | `_1234_1` | |
+| User `id` | `users.pk1` (`users_pk1` in the data files) | `_1234_1` | |
+
+A course can be looked up by any of its three IDs: `/courses/_101_1`, `/courses/courseId:DEMO101` or `/courses/externalId:DEMO101`. In the reports and `idmap.csv`, the `_1234_1` form is the REST `id`; the plain number (`orig_pk1`, `new_pk1`) is the database field.
+
+## ID map
+
+`idmap.csv` holds every grade column in each Original, matched to its copy, plus one row for the course itself. The hand-off report shows the same rows for its course. Query M2 does the matching.
+
+| Column | Source |
+|---|---|
+| `orig_course_id` | `course_main.course_id` of the Original |
+| `new_course_id` | `course_main.course_id` of the copy |
+| `kind` | `course` for the course row, `grade column` for the others |
+| `id_table` | The table `orig_id`, `new_id`, `orig_pk1` and `new_pk1` are from: `course_main` on the course row, `gradebook_main` on a grade column row |
+| `orig_id`, `new_id` | The row's primary key in its text form: the course primary key (`course_main.pk1`) on the course row, the grade column ID (`gradebook_main.pk1`) on a grade column row |
+| `orig_pk1`, `new_pk1` | The same primary keys as plain numbers |
+| `orig_batch_uid`, `new_batch_uid` | `course_main.batch_uid` (the external ID), on the course row only |
+| `orig_content_pk1`, `new_content_pk1` | The content ID (`course_contents.pk1`) of the item the grade column belongs to, from `gradebook_main.course_contents_pk1`; blank for columns with no item |
+| `title` | `course_main.course_name` on the course row; `gradebook_main.title` on a grade column row |
+| `attached_item` | `course_contents.title` of the item the column belongs to |
+| `match_status` | How the column was matched (below) |
+
+**How columns are matched.** A grade column is matched to the copy by the item it belongs to, not by its own title:
+
+1. The attached item's title (`course_contents.title`), its type (`gradebook_main.score_provider_handle`) and its parent folder's title.
+2. If that finds none, the item's title and type.
+3. A column with no item (a total or a calculated column) is matched by its own title (`gradebook_main.title`) and whether it is calculated (`gradebook_main.calculated_ind`).
+
+Titles are compared without formatting, case, repeated spaces or curly quotes, because conversion strips those. An Original assignment counts as the same type as an Ultra assessment.
+
+| `match_status` | Meaning |
+|---|---|
+| `matched` | One column in the copy fits |
+| `matched (visibility tie-break)` | Several fit; one has the same visibility (`gradebook_main.visible_ind` and `visible_in_book_ind`) |
+| `matched (order tie-break)` | Several fit equally; they are paired in creation order (`gradebook_main.pk1`), which the copy keeps |
+| `ambiguous` | Several fit and can't be told apart; `new_id` is blank until resolved |
+| `not found` | No column in the copy fits |
+| `removed in Ultra (weighted total)` | Ultra doesn't keep the Weighted Total column |
+| `removed in Ultra (default total, nothing graded)` | Ultra drops the default Total when nothing in the course is graded |
+| `new in Ultra` | A column only the copy has, for example for an undeployed test |
+
+Deleted columns (`gradebook_main.deleted_ind` = `Y`) are left out everywhere.
+
+## The course
+
+| Row | Source |
+|---|---|
+| Course ID | `course_main.course_id` (S1) |
+| Course primary key | `course_main.pk1` (S1) |
+| External ID | `course_main.batch_uid` (S1) |
+| New course ID | The prefix, `course_main.course_id`, then the suffix (S1) |
+| Available to learners now | `course_main.available_ind` (S1) |
+| Members | `course_users` rows with `row_status` 0; staff have a `role` other than `S`, students have `role` `S` (S2) |
+| Students in progress | Students with `course_users.available_ind` = `Y` (S2) |
+| Active in the last 30 days, not for 90 days, never accessed | `course_users.last_access_date` of students in progress (S2) |
+| Students completed or expired | Students with `course_users.available_ind` = `N` (S2) |
+| Disabled students | Students with `course_users.row_status` other than 0 (S2) |
+| Content: items, tests, assignments, SCORM, discussion links, LTI links | `course_contents` rows, by `cnthndlr_handle` (S3; values under [Code values](#code-values)) |
+| Gated items | Items in `course_contents` with a release rule in `avl_rule` (S9) |
+| Grade columns | `gradebook_main` rows, deleted columns left out (S4) |
+| Groups | `groups` rows (S8) |
+| Partial-credit questions | Questions in tests with `qti_asi_data.bbmd_partialcredit` = `Y` (S5b) |
+| Discussion posts | `msg_main` rows in the course's forums (`conference_main`, `forum_main`) (S11) |
+
+## Site conversion settings
+
+The reports list these from `system_registry.registry_value`, by `system_registry.registry_key` (S14). A key with no row means the setting has never been changed, so the default applies.
+
+| Setting | `registry_key` | Default |
+|---|---|---|
+| Blackboard LMS version | `release_number` | |
+| Content takes the release conditions of its folder or learning module | `featureFlags:feature.course.release.condition.inheritance:Tenant` | |
+| Levels of nested content | `course.structure.max_level_of_nesting` | 3 |
+| Content areas become learning modules | `ultraui.converting.content.areas.to.learning.modules` | |
+| Folder and learning module descriptions become documents | `ultraui.converting.folder.and.learning.module.descriptions.to.documents` | Yes |
+| Undeployed tests become question banks | `ultraui.converting.undeployed.tests.to.question.banks` | No |
+
+## Hand-off checks
+
+Each check runs the same query on the Original (from the pre-conversion scan) and on the copy, and compares the results. The "Original" and "Ultra copy" columns are the two values.
+
+| Area | Check | Query | Compared |
+|---|---|---|---|
+| Course | Copy exists | S1 | A `course_main` row with the new course ID |
+| Course | Copy and convert task, Failed system tasks | S13 | `queued_tasks.task_type`, `status`, `start_date`, `end_date`, `results` |
+| Members | Active members, Students, Students in progress, Students completed or expired, Disabled students | S2 | `course_users` counts, as in the pre-conversion report |
+| Content | Tests and assignments, SCORM items, Discussion links, LTI tool links, All items | S3 | `course_contents` counts by `cnthndlr_handle` |
+| Content | Content types carried over | S3c | `course_contents` counts per `cnthndlr_handle` |
+| Content | Folders moved up by conversion | S3d, S3b | Each too-deep folder found again in the copy by `course_contents.title`, with its depth and the items directly in it (`parent_pk1`) |
+| Content | Undeployed tests in a hidden folder | S3b | A hidden top-level folder (`available_ind` = `N`) in the copy that the Original doesn't have, holding tests |
+| Content | Items wrapped in a folder by conversion | S3b | Folders in the copy holding one item of the same `course_contents.title` |
+| Content | Hidden items still hidden, Hidden items now visible to learners, Visible items now hidden, Items not found by title in Ultra | S3b | `course_contents.available_ind`, items matched by `title` and `cnthndlr_handle` |
+| Grades | Grade columns | S4 | `gradebook_main` counts |
+| Grades | Hidden columns now visible | S4, M2 | `gradebook_main.visible_ind` of each matched column |
+| Grades | Hidden columns that learners see with their item | S4, M2 | `gradebook_main.visible_ind` = `N` on a column whose item has `course_contents.available_ind` = `Y` |
+| Groups | Groups, Groups in use | S8 | `groups.group_name`, with `group_users`, `avl_crit_acl_group` and `user_test_option` |
+| Release conditions | Gated items still gated | S9 | Items with an `avl_rule`, matched by `course_contents.title` |
+| Release conditions | Conditions carried over exactly | S9 | Each `avl_crit`: `crit_type`, `negate_ind`, `min_score`, `max_score`, `start_date`, `end_date`, the gate column's `gradebook_main.title`, the reviewed item, the groups and the named learners |
+| Tests | Questions with partial-credit answer values | S5c | Questions with answer weights between 0% and 100% (`qti_asi_data.data`) |
+| Tests | Questions drawn through random blocks and question sets, Pools and question banks | S5e | `qti_block_mapping` rows; `qti_asi_data.bbmd_assessmenttype` 4 |
+| Tests | Questions in tests | S5d | Questions per `qti_asi_data.bbmd_questiontype` |
+| Tests | Test exceptions | S12b | `user_test_option` rows |
+| Learner records | Attempts in progress, Submissions waiting for grading | S7 | `attempt.status` counts per grade row |
+| Learner records | Grade and attempt records matching | S7, M2 | Per learner (`users_pk1`) and matched column: attempts, submitted, open and waiting attempts (`attempt.status`), highest score (`attempt.score`), `gradebook_grade.manual_score` and `exempt_ind` |
+| Learner records | Unavailable students' records, Disabled students' records | S2b | Totals of `gradebook_grade` rows, `attempt` rows and SCORM registrations |
+| SCORM | SCORM records with the same resume state | S10 | Per learner, package and attempt: a fingerprint of `scormactivityrt.location`, `suspend_data`, `completion_status`, `success_status` and `score_raw`, or of `scormregistration.runtime_data` where the engine hasn't written those out |
+
+**Folders moved up by conversion** (the table of the same name): "Original location" is the chain of `course_contents.title` values up the `parent_pk1` links; "Level" counts from the top of Course Content.
+
+## Code values
+
+| Field | Values |
+|---|---|
+| `course_users.role` | `S` student, `P` instructor, `T` teaching assistant, `B` course builder, `G` grader, or a custom role |
+| `course_users.row_status` | 0 enabled, 2 disabled |
+| `course_users.available_ind` | `Y` in progress, `N` completed or access expired |
+| `course_main.available_ind`, `course_contents.available_ind` | `Y` available to learners, `N` hidden |
+| `gradebook_main.visible_ind` | `Y` shown to learners, `N` hidden |
+| `gradebook_main.calculated_ind` | `N` not calculated; any other value is a calculated column (total, average, weighted) |
+| `attempt.status` | 1 not attempted, 2 abandoned, 3 in progress, 4 suspended, 5 cancelled, 6 needs grading, 7 completed, 8 in more progress, 9 needs more grading. Open: 3, 4, 8. Submitted: 6, 7, 9 |
+| `qti_asi_data.bbmd_asi_type` | 1 assessment, 2 section, 3 question |
+| `qti_asi_data.bbmd_assessmenttype` | 1 test, 4 pool or question bank |
+| `course_assessment.timer_completion` | `H` auto-submit on, `C` auto-submit off |
+| `queued_tasks.status` | `C` complete, `E` error, `I` in progress |
+
+**Content types** (`course_contents.cnthndlr_handle`):
+
+| Value | Type |
+|---|---|
+| `resource/x-bb-folder` | Folder |
+| `resource/x-bb-lesson` | Learning module |
+| `resource/x-bb-document` | Item or document |
+| `resource/x-bb-asmt-test-link` | Test |
+| `resource/x-bb-assignment` | Assignment |
+| `resource/x-plugin-scormengine` | SCORM package |
+| `resource/x-bb-forumlink` | Discussion link |
+| `resource/x-bb-courselink` | Course link |
+| `resource/x-bb-toollink` | Tool link |
+| `resource/x-bb-externallink` | Web link |
+| `resource/x-bb-blti...` | LTI tool link |
+
+## The queries
+
+| Query | Reads | Tables |
+|---|---|---|
+| S1 | Course identity and status | `course_main` |
+| S2 | Members by role and state | `course_users` |
+| S2b | Totals for unavailable and disabled students | `course_users`, `gradebook_grade`, `gradebook_main`, `attempt`, SCORM engine tables |
+| S3 | Content counts | `course_contents` |
+| S3b | Every item with its path | `course_contents` |
+| S3c | Content types | `course_contents` |
+| S3d | Folders nested too deep | `course_contents`, `system_registry` |
+| S3e | Folder descriptions | `course_contents`, `course_contents_files`, `system_registry` |
+| S4 | Grade columns | `gradebook_main`, `gradebook_grade`, `course_contents` |
+| S5b, S5c | Partial-credit questions and their answer weights | `gradebook_main`, `qti_asi_data`, `qti_block_mapping`, `avl_crit` |
+| S5d | Question types | `qti_asi_data`, `qti_block_mapping` |
+| S5e | Question sources | `qti_asi_data`, `qti_block_mapping` |
+| S5f | Undeployed tests | `qti_asi_data`, `course_assessment`, `qti_block_mapping`, `system_registry` |
+| S6 | SCORM settings | `course_contents`, `scormbbpackageinfo`, `scormbbgradebookinfo`, `scormpackage`, `scormpackageproperties` |
+| S7 | Each learner's grades and attempts | `course_users`, `gradebook_main`, `gradebook_grade`, `attempt` |
+| S8, S8b | Groups and their members | `groups`, `group_users`, `avl_crit_acl_group`, `user_test_option`, `course_users` |
+| S9 | Release conditions | `course_contents`, `avl_rule`, `avl_crit`, `avl_crit_acl_group`, `avl_crit_acl_user`, `gradebook_main`, `groups` |
+| S10 | Each learner's SCORM records | `scormpackage`, `scormregistration`, `scormactivity`, `scormactivityrt`, `course_users` |
+| S11 | Discussion volume | `conference_main`, `forum_main`, `msg_main` |
+| S12, S12b | Test settings and exceptions | `gradebook_main`, `course_assessment`, `attempt`, `user_test_option`, `groups` |
+| S13 | System tasks | `queued_tasks` |
+| S14 | Site conversion settings | `system_registry` |
+| M2 | Grade column map, Original to copy | `course_main`, `gradebook_main`, `course_contents` |

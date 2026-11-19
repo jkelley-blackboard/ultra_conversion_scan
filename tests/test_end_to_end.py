@@ -78,22 +78,35 @@ def test_id_map(tmp_path):
         rows = list(csv.DictReader(f))
     status = {(r["orig_course_id"], r["title"]): r["match_status"] for r in rows}
     assert status[("DEMO101", "Weighted Total")] == "removed in Ultra (weighted total)"
+    from convscan import compare
+    assert compare._WEIGHTED.search("Total pondéré")   # the French name of the same column
     assert status[("DEMO102", "Case Study")] == "matched"
-    assert [r for r in rows if r["kind"] == "course" and r["new_id"] == "_901_1"
-            and r["new_pk1"] == "901" and r["id_table"] == "course_main"]
+    course = next(r for r in rows if r["kind"] == "course" and r["orig_course_id"] == "DEMO101")
+    assert (course["new_id"], course["new_pk1"], course["id_table"]) == ("_901_1", "901", "course_main")
+    assert (course["orig_batch_uid"], course["new_batch_uid"]) == ("DEMO101", "DEMO101-7777")
     col = next(r for r in rows if r["title"] == "Module 1 Quiz")
     assert (col["orig_pk1"], col["new_pk1"], col["id_table"]) == ("1002", "9002", "gradebook_main")
+    # The grade column ID and its item's content ID are different keys, in their own columns.
+    assert col["orig_content_pk1"] and col["new_content_pk1"] and col["orig_content_pk1"] != col["orig_pk1"]
+    assert col["orig_batch_uid"] == ""
+    total = next(r for r in rows if r["title"] == "Total")
+    assert total["orig_content_pk1"] == "" and total["new_content_pk1"] == ""
+    handoff = (post / "DEMO101_handoff.md").read_text(encoding="utf-8")
+    assert "External ID (`course_main.batch_uid`) | DEMO101 → DEMO101-7777" in handoff
 
 
-def test_batch_summary_ends_with_the_key_for_its_reports(tmp_path):
+def test_each_batch_has_a_report_key_for_its_reports(tmp_path):
     pre, post = _render(tmp_path)
-    pre_text = (pre / "batch_summary.md").read_text(encoding="utf-8")
-    post_text = (post / "batch_summary.md").read_text(encoding="utf-8")
-    for text in (pre_text, post_text):
-        assert "## Where each value comes from" in text and "course_main.pk1" in text
-    assert "### Findings" in pre_text and "### Hand-off checks" not in pre_text
-    assert "### Hand-off checks" in post_text and "### ID map" in post_text and "### Findings" not in post_text
-    assert "#where-each-value-comes-from" in (post / "DEMO101_handoff.md").read_text(encoding="utf-8")
+    pre_key = (pre / "REPORT_KEY.md").read_text(encoding="utf-8")
+    post_key = (post / "REPORT_KEY.md").read_text(encoding="utf-8")
+    for key in (pre_key, post_key):
+        assert key.startswith("# Report Key:") and "course_main.batch_uid" in key and "—" not in key
+    assert "## Findings" in pre_key and "## Hand-off checks" not in pre_key
+    assert "## Hand-off checks" in post_key and "## ID map" in post_key and "## Findings" not in post_key
+    assert "course_contents.pk1" in post_key and "orig_content_pk1" in post_key
+    for out, report in ((pre, "DEMO101_preflight.md"), (post, "DEMO101_handoff.md"), (post, "batch_summary.md")):
+        assert "(REPORT_KEY.md)" in (out / report).read_text(encoding="utf-8")
+    assert "## IDs" not in (post / "batch_summary.md").read_text(encoding="utf-8")   # not repeated in the summary
 
 
 def test_handoff_warns_when_scanned_behind_the_replica(tmp_path):

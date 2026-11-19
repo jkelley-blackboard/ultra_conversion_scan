@@ -1,27 +1,47 @@
-## Where each value comes from
+# Report Key: {{ run.name }}
 
-This section gives the database table and field behind each value in this batch's {{ "pre-conversion reports" if mode == "pre" else "hand-off reports and `idmap.csv`" }}, written as `table.field`.
+**Where each value comes from.** This key goes with the {{ "pre-conversion reports" if mode == "pre" else "hand-off reports and `idmap.csv`" }} in this folder. It gives the database table and field behind each value, written as `table.field`.
 
 The tables are in the Blackboard LMS reporting database, read through Direct Data Access (DDA). Each value comes from one query in the SQL kit (`conversion_scan.template.sql`), named by its label (S1, S2 and so on), so you can run the same query yourself. Every query is read-only.
 
-### IDs
+## IDs
 
 **Primary keys.** Every table has a numeric primary key, its `pk1` field. Blackboard LMS shows it in the REST API and in browser addresses as text: an underscore, the number, then `_1`. So `_1002_1` in a report is the row whose `pk1` is 1002. The number is what the database stores; the `_1` is part of the text form only.
 
-| Shown as | Is | Table |
-|---|---|---|
-| Course ID in the ID map (`_101_1`) | `course_main.pk1` (101) | `course_main` |
-| Grade column ID (`_1002_1`) | `gradebook_main.pk1` (1002) | `gradebook_main` |
-| Content item (`content_pk` in the data files) | `course_contents.pk1` | `course_contents` |
+There are three kinds of primary key in these reports. Each belongs to a different table, and the same number in two tables means two different things:
+
+| ID | Field | What it identifies | Where it appears |
+|---|---|---|---|
+| **Course primary key** | `course_main.pk1` | The course | The course table, and the course row of the ID map (`_101_1`) |
+| **Grade column ID** | `gradebook_main.pk1` | A column in the Grade Center or gradebook: what scores are recorded against, and what an outside system reads grades from | Grade column rows of the ID map (`orig_id`, `new_id`, `orig_pk1`, `new_pk1`) |
+| **Content ID** | `course_contents.pk1` | An item in the course: a test link, SCORM package, assignment, folder or document | The ID map's `orig_content_pk1` and `new_content_pk1`, and `content_pk` in the data files |
+
+A grade column and its item are linked by `gradebook_main.course_contents_pk1`, which holds the item's content ID. Columns with no item (totals, calculated columns, columns made by hand) have no content ID. A test has a third ID of its own, `qti_asi_data.pk1` (`gradebook_main.qti_asi_data_pk1`), which the reports don't show.
+
+Conversion gives every course, grade column and item a new primary key, so each Original ID has a different Ultra ID.
 
 **Course ID.** The readable ID, such as `DEMO101`, is `course_main.course_id`. The copy's course ID is the prefix, the Original's course ID, then the suffix (for example `DEMO101-7777`), as set in the run's configuration.
 
-**External ID.** `course_main.batch_uid` is the ID that integrations and the REST API's `externalId:` lookups use. The reports don't show it. After copy and convert, the copy's external ID is the same as its new course ID.
+**External ID.** `course_main.batch_uid` is the ID that integrations, SIS feeds and the REST API's `externalId:` lookups use. Both reports show it. After copy and convert, the copy's external ID is the same as its new course ID, until an integration changes it.
 
 **Learners.** Learners appear only as `users_pk1` (`users.pk1`, the same in the Original and the copy) or `course_users.pk1` (the enrollment), never by name, username or email.
+
+**In the REST API.** The Blackboard LMS REST API names the same values differently. A course has three IDs:
+
+| REST field | Database field | Form | Example |
+|---|---|---|---|
+| Course `id` | `course_main.pk1` (the course primary key) | `_1234_1` | `_101_1` |
+| Course `courseId` | `course_main.course_id` | As stored | `DEMO101` |
+| Course `externalId` | `course_main.batch_uid` | As stored | `DEMO101` |
+| Grade column `id` | `gradebook_main.pk1` (the grade column ID) | `_1234_1` | `_1002_1` |
+| Grade column `contentId` | `gradebook_main.course_contents_pk1` (the item's content ID) | `_1234_1` | |
+| Content `id` | `course_contents.pk1` (the content ID) | `_1234_1` | |
+| User `id` | `users.pk1` (`users_pk1` in the data files) | `_1234_1` | |
+
+A course can be looked up by any of its three IDs: `/courses/_101_1`, `/courses/courseId:DEMO101` or `/courses/externalId:DEMO101`. In the reports and `idmap.csv`, the `_1234_1` form is the REST `id`; the plain number (`orig_pk1`, `new_pk1`) is the database field.
 {% if mode == "post" %}
 
-### ID map
+## ID map
 
 `idmap.csv` holds every grade column in each Original, matched to its copy, plus one row for the course itself. The hand-off report shows the same rows for its course. Query M2 does the matching.
 
@@ -30,11 +50,13 @@ The tables are in the Blackboard LMS reporting database, read through Direct Dat
 | `orig_course_id` | `course_main.course_id` of the Original |
 | `new_course_id` | `course_main.course_id` of the copy |
 | `kind` | `course` for the course row, `grade column` for the others |
-| `id_table` | The table the IDs are from: `course_main` or `gradebook_main` |
-| `orig_id`, `new_id` | The primary key in its text form: `course_main.pk1` on the course row, `gradebook_main.pk1` on a grade column row |
+| `id_table` | The table `orig_id`, `new_id`, `orig_pk1` and `new_pk1` are from: `course_main` on the course row, `gradebook_main` on a grade column row |
+| `orig_id`, `new_id` | The row's primary key in its text form: the course primary key (`course_main.pk1`) on the course row, the grade column ID (`gradebook_main.pk1`) on a grade column row |
 | `orig_pk1`, `new_pk1` | The same primary keys as plain numbers |
+| `orig_batch_uid`, `new_batch_uid` | `course_main.batch_uid` (the external ID), on the course row only |
+| `orig_content_pk1`, `new_content_pk1` | The content ID (`course_contents.pk1`) of the item the grade column belongs to, from `gradebook_main.course_contents_pk1`; blank for columns with no item |
 | `title` | `course_main.course_name` on the course row; `gradebook_main.title` on a grade column row |
-| `attached_item` | `course_contents.title` of the item the column belongs to (`gradebook_main.course_contents_pk1`) |
+| `attached_item` | `course_contents.title` of the item the column belongs to |
 | `match_status` | How the column was matched (below) |
 
 **How columns are matched.** A grade column is matched to the copy by the item it belongs to, not by its own title:
@@ -59,10 +81,13 @@ Titles are compared without formatting, case, repeated spaces or curly quotes, b
 Deleted columns (`gradebook_main.deleted_ind` = `Y`) are left out everywhere.
 {% endif %}
 
-### The course
+## The course
 
 | Row | Source |
 |---|---|
+| Course ID | `course_main.course_id` (S1) |
+| Course primary key | `course_main.pk1` (S1) |
+| External ID | `course_main.batch_uid` (S1) |
 | New course ID | The prefix, `course_main.course_id`, then the suffix (S1) |
 | Available to learners now | `course_main.available_ind` (S1) |
 | Members | `course_users` rows with `row_status` 0; staff have a `role` other than `S`, students have `role` `S` (S2) |
@@ -78,7 +103,7 @@ Deleted columns (`gradebook_main.deleted_ind` = `Y`) are left out everywhere.
 | Discussion posts | `msg_main` rows in the course's forums (`conference_main`, `forum_main`) (S11) |
 {% if mode == "pre" %}
 
-### Findings
+## Findings
 
 Each finding in a report's "What could go wrong" is one rule applied to one query's rows. The fields below are the ones the rule tests.
 
@@ -128,7 +153,7 @@ Each finding in a report's "What could go wrong" is one rule applied to one quer
 | SCORM packages with a time limit | S6 | `scormpackageproperties.time_limit` |
 {% endif %}
 
-### Site conversion settings
+## Site conversion settings
 
 The reports list these from `system_registry.registry_value`, by `system_registry.registry_key` (S14). A key with no row means the setting has never been changed, so the default applies.
 
@@ -142,7 +167,7 @@ The reports list these from `system_registry.registry_value`, by `system_registr
 | Undeployed tests become question banks | `ultraui.converting.undeployed.tests.to.question.banks` | No |
 {% if mode == "post" %}
 
-### Hand-off checks
+## Hand-off checks
 
 Each check runs the same query on the Original (from the pre-conversion scan) and on the copy, and compares the results. The "Original" and "Ultra copy" columns are the two values.
 
@@ -175,7 +200,7 @@ Each check runs the same query on the Original (from the pre-conversion scan) an
 **Folders moved up by conversion** (the table of the same name): "Original location" is the chain of `course_contents.title` values up the `parent_pk1` links; "Level" counts from the top of Course Content.
 {% endif %}
 
-### Code values
+## Code values
 
 | Field | Values |
 |---|---|
@@ -207,7 +232,7 @@ Each check runs the same query on the Original (from the pre-conversion scan) an
 | `resource/x-bb-externallink` | Web link |
 | `resource/x-bb-blti...` | LTI tool link |
 
-### The queries
+## The queries
 
 | Query | Reads | Tables |
 |---|---|---|

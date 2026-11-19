@@ -4,7 +4,7 @@
 
 **Prepared for:** {{ cfg.prepared_for }} | **Scan:** {{ run.finished[:10] }} | **Batch:** {{ run.name }}
 
-> Generated from the LMS reporting database by convscan {{ version }}. Figures are as of the scan. Severity: 1 blocks learners, 2 needs fixing, 3 improves the experience, 0 to check by hand. Where each value comes from (`table.field`): the key at the end of [batch_summary.md](batch_summary.md#where-each-value-comes-from).
+> Generated from the LMS reporting database by convscan {{ version }}. Figures are as of the scan. Severity: 1 blocks learners, 2 needs fixing, 3 improves the experience, 0 to check by hand. Where each value comes from (`table.field`): [REPORT_KEY.md](REPORT_KEY.md).
 
 ## In short
 
@@ -25,6 +25,8 @@
 
 | | |
 |---|---|
+| Course primary key (`course_main.pk1`) | {{ c.crs_pk or "" }} |
+| External ID (`course_main.batch_uid`) | {{ c.batch_uid or "not read in this scan" }} |
 | New course ID | {{ c.new_course_id }} |
 | Available to learners now | {{ c.available }} |
 | Members | {{ c.members | n }} ({{ c.staff | n }} staff, {{ c.students | n }} students) |
