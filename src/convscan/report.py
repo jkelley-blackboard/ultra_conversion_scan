@@ -150,7 +150,8 @@ def render_post(run_dir: pathlib.Path, run: dict, data: dict, base_run: dict, ba
         written.append(path)
         summary.append({"c": facts, "statuses": statuses, "report": path.name})
     _write_csv(out / "idmap.csv", all_map,
-               ["orig_course_id", "new_course_id", "kind", "orig_id", "new_id", "title", "attached_item", "match_status"])
+               ["orig_course_id", "new_course_id", "kind", "orig_id", "new_id", "title", "attached_item", "match_status",
+                "id_table", "orig_pk1", "new_pk1"])
     _write_csv(run_dir / "data" / "diff_learner_records.csv", all_diffs,
                ["course_id", "users_pk1", "orig_col_pk", "new_col_pk", "field", "original", "copy"])
     path = out / "batch_summary.md"

@@ -331,7 +331,9 @@ order by d.course_id, d.path;
 -- ===========================================================================
 -- S4. Gradebook columns: type, attached item, visibility, calculated, orphans
 --     (columns tracked by an outside system are joined afterwards from its own list).
---     Deleted columns are excluded.
+--     Deleted columns are excluded. item_available is the attached item's availability (null
+--     when the column has no item): in Ultra a column attached to an item shows to learners
+--     whenever the item does, whatever the column's own visibility says.
 -- ===========================================================================
 with scope as ({SCOPE}),
 grades as (
@@ -342,6 +344,7 @@ grades as (
   group by gg.gradebook_main_pk1)
 select s.course_id, gm.pk1 as col_pk, gm.title, gm.display_title, gm.score_provider_handle,
   gm.course_contents_pk1 as content_pk, cc.title as content_title, p.title as content_parent_title,
+  cc.available_ind as item_available,
   gm.calculated_ind, gm.scorable_ind, gm.possible, gm.aggregation_model,
   gm.visible_ind, gm.visible_in_book_ind,           -- 'N' = hidden from students today
   gm.single_attempt_ind, gm.multiple_attempts,

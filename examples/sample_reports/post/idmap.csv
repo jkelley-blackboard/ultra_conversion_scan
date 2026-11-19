@@ -1,10 +1,10 @@
-orig_course_id,new_course_id,kind,orig_id,new_id,title,attached_item,match_status
-DEMO101,DEMO101-7777,course,_101_1,_901_1,Introduction to Portfolio Management,,matched
-DEMO101,DEMO101-7777,grade column,_1002_1,_9002_1,Module 1 Quiz,Module 1 Quiz,matched
-DEMO101,DEMO101-7777,grade column,_1003_1,_9003_1,Placement Test,Placement Test,matched
-DEMO101,DEMO101-7777,grade column,_1006_1,_9006_1,Module 1 Interactive,Module 1 Interactive,matched
-DEMO101,DEMO101-7777,grade column,_1008_1,,Weighted Total,,removed in Ultra (weighted total)
-DEMO101,DEMO101-7777,grade column,_1009_1,_9009_1,Total,,matched
-DEMO102,DEMO102-7777,course,_102_1,_902_1,Ethics in Practice,,matched
-DEMO102,DEMO102-7777,grade column,_1012_1,_9012_1,Final Test,Final Test,matched
-DEMO102,DEMO102-7777,grade column,_1013_1,_9013_1,Case Study,Case Study,matched
+orig_course_id,new_course_id,kind,orig_id,new_id,title,attached_item,match_status,id_table,orig_pk1,new_pk1
+DEMO101,DEMO101-7777,course,_101_1,_901_1,Introduction to Portfolio Management,,matched,course_main,101,901
+DEMO101,DEMO101-7777,grade column,_1002_1,_9002_1,Module 1 Quiz,Module 1 Quiz,matched,gradebook_main,1002,9002
+DEMO101,DEMO101-7777,grade column,_1003_1,_9003_1,Placement Test,Placement Test,matched,gradebook_main,1003,9003
+DEMO101,DEMO101-7777,grade column,_1006_1,_9006_1,Module 1 Interactive,Module 1 Interactive,matched,gradebook_main,1006,9006
+DEMO101,DEMO101-7777,grade column,_1008_1,,Weighted Total,,removed in Ultra (weighted total),gradebook_main,1008,
+DEMO101,DEMO101-7777,grade column,_1009_1,_9009_1,Total,,matched,gradebook_main,1009,9009
+DEMO102,DEMO102-7777,course,_102_1,_902_1,Ethics in Practice,,matched,course_main,102,902
+DEMO102,DEMO102-7777,grade column,_1012_1,_9012_1,Final Test,Final Test,matched,gradebook_main,1012,9012
+DEMO102,DEMO102-7777,grade column,_1013_1,_9013_1,Case Study,Case Study,matched,gradebook_main,1013,9013

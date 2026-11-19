@@ -294,6 +294,33 @@ def test_hidden_items_and_wrapped_items():
     assert got["documents_wrapped"]["severity"] == 3 and "scriptable" not in got["documents_wrapped"]["action"]
 
 
+def test_hidden_column_rules_split_by_item():
+    from convscan.config import PACKAGE
+    doc = rules.load_rules(PACKAGE / "rules" / "default.yaml")
+    s4 = [{"course_id": "C1", "title": "Quiz 1", "visible_ind": "N", "content_pk": 5, "item_available": "Y"},
+          {"course_id": "C1", "title": "Total", "visible_ind": "N", "content_pk": "", "item_available": ""},
+          {"course_id": "C1", "title": "Staff test", "visible_ind": "N", "content_pk": 6, "item_available": "N"}]
+    got = {f["id"]: f for f in rules.evaluate(doc, {"S4": s4}, "C1", {"S4"}, {})[0]}
+    assert got["hidden_columns_shown"]["n"] == 1 and "Quiz 1" in got["hidden_columns_shown"]["says"]
+    assert got["hidden_columns_no_item"]["n"] == 1 and "Total" in got["hidden_columns_no_item"]["says"]
+
+
+def test_hidden_column_follows_its_item_in_the_copy():
+    from convscan.compare import ACTION, EXPECTED, check_hidden_columns
+    post = {"M2": [{"orig_course_id": "C1", "orig_col_pk": 1, "new_col_pk": 11, "title": "Quiz 1", "visible_ind": "N"},
+                   {"orig_course_id": "C1", "orig_col_pk": 2, "new_col_pk": 12, "title": "Total", "visible_ind": "N"},
+                   {"orig_course_id": "C1", "orig_col_pk": 3, "new_col_pk": 13, "title": "Old", "visible_ind": "N"}],
+            "S4": [{"course_id": "U-C1", "col_pk": 11, "visible_ind": "N", "content_pk": 50, "item_available": "Y"},
+                   {"course_id": "U-C1", "col_pk": 12, "visible_ind": "N", "content_pk": None},
+                   {"course_id": "U-C1", "col_pk": 13, "visible_ind": "Y", "content_pk": None}]}
+    p = _pair({"S4": []}, post)
+    check_hidden_columns(p)
+    got = {c["check"]: c for c in p.checks}
+    assert got["Hidden columns that learners see with their item"]["status"] == EXPECTED
+    assert "Quiz 1" in got["Hidden columns that learners see with their item"]["note"]
+    assert got["Hidden columns now visible"]["status"] == ACTION and "Old" in got["Hidden columns now visible"]["note"]
+
+
 def test_sums_placeholder_in_rule_text():
     doc = {"rules": [{"id": "r", "title": "t", "source": "S3d", "severity": 2,
                       "says": "{n} folder(s) holding {sums[items_below]} item(s)"}]}

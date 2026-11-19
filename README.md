@@ -103,7 +103,7 @@ a row per learner and are the large ones. S7, S8b and S10 read only students in 
 | S3b | Every item with its folder path, availability and depth |
 | S3d | Folders and learning modules deeper than the site's nesting limit in Ultra (Original courses only) |
 | S3e | Folder and learning module descriptions (Original courses only): text length, formatting, links, media, attached files, and what the site's descriptions setting does with them |
-| S4 | Grade columns: type, attached item, visibility, calculated or not |
+| S4 | Grade columns: type, attached item and whether learners can open it, visibility, calculated or not |
 | S5b | Questions with partial credit per course, by how their tests are used (route learners, open the next step, or just graded) |
 | S5c | Each partial-credit question's answer values: the repair list and its baseline |
 | S5d | Question types in every test, including those Ultra removes |
@@ -198,7 +198,8 @@ counts only.
 | What | Saved where | About learners |
 |---|---|---|
 | Reports, batch summary | `reports/` | Counts only. Titles of courses, items, columns and groups appear; group names are whatever the course author typed |
-| `idmap.csv` | `reports/` | Nothing: course and grade column IDs |
+| `idmap.csv` | `reports/` | Nothing: course and grade column IDs, in text form (`_1002_1`) and as plain `pk1` numbers with their table |
+| The key, at the end of `batch_summary.md` | `reports/` | Nothing: where each value in that batch's reports comes from, as `table.field`, for the run type (pre or post). Template: [report_key.md.j2](src/convscan/templates/report_key.md.j2) |
 | `run.json` | Run folder | Nothing: courses, settings, row counts, timings, replica lag |
 | S7, S8b, S10, S12b, and S9's named users | `data/*.csv` | One row per learner by internal key: grades, attempts, group, test exceptions, SCORM location. S7, S8b and S10 cover students in progress only, unless `--all-learners` |
 | S2b | `data/*.csv` | Totals per course for unavailable and disabled students: no one's records |
@@ -304,7 +305,7 @@ src/convscan/
   report.py       course facts and rendering the reports
   sql/            conversion_scan.template.sql: every query
   rules/          default.yaml: the rule table
-  templates/      preflight.md.j2, handoff.md.j2, batch_summary.md.j2
+  templates/      preflight.md.j2, handoff.md.j2, batch_summary.md.j2, report_key.md.j2
 tests/
   test_core.py        the pieces: splitting the SQL, choosing courses, rules, SCORM decoding
   test_end_to_end.py  renders pre and post reports from invented runs and checks what they say

@@ -26,7 +26,7 @@ def test_preflight_flags_the_known_risks(tmp_path):
     pre, _ = _render(tmp_path)
     text = (pre / "DEMO101_preflight.md").read_text(encoding="utf-8")
     for expected in ("Release conditions that depend on groups", "Partial credit in tests that open the next step",
-                     "Test attempts open now", "Grade columns hidden from learners", "Site conversion settings",
+                     "Test attempts open now", "Hidden grade columns that learners will see", "Site conversion settings",
                      "Folders nested deeper than Ultra allows", "3 levels of nested content",
                          "Further Reading (2 item(s))",
                      "Tests that draw questions from an undeployed test", "by: Module 1 Quiz"):
@@ -79,7 +79,21 @@ def test_id_map(tmp_path):
     status = {(r["orig_course_id"], r["title"]): r["match_status"] for r in rows}
     assert status[("DEMO101", "Weighted Total")] == "removed in Ultra (weighted total)"
     assert status[("DEMO102", "Case Study")] == "matched"
-    assert [r for r in rows if r["kind"] == "course" and r["new_id"] == "_901_1"]
+    assert [r for r in rows if r["kind"] == "course" and r["new_id"] == "_901_1"
+            and r["new_pk1"] == "901" and r["id_table"] == "course_main"]
+    col = next(r for r in rows if r["title"] == "Module 1 Quiz")
+    assert (col["orig_pk1"], col["new_pk1"], col["id_table"]) == ("1002", "9002", "gradebook_main")
+
+
+def test_batch_summary_ends_with_the_key_for_its_reports(tmp_path):
+    pre, post = _render(tmp_path)
+    pre_text = (pre / "batch_summary.md").read_text(encoding="utf-8")
+    post_text = (post / "batch_summary.md").read_text(encoding="utf-8")
+    for text in (pre_text, post_text):
+        assert "## Where each value comes from" in text and "course_main.pk1" in text
+    assert "### Findings" in pre_text and "### Hand-off checks" not in pre_text
+    assert "### Hand-off checks" in post_text and "### ID map" in post_text and "### Findings" not in post_text
+    assert "#where-each-value-comes-from" in (post / "DEMO101_handoff.md").read_text(encoding="utf-8")
 
 
 def test_handoff_warns_when_scanned_behind_the_replica(tmp_path):

@@ -322,7 +322,10 @@ the post-scan still compares the learners its baseline read.
 
 Conversion gives every course and grade column a new ID. Systems outside the LMS that store those IDs
 (a student records system, a certification platform) need the new ones. `idmap.csv` lists every
-Original course and grade column ID beside its Ultra counterpart, with how it was matched:
+Original course and grade column ID beside its Ultra counterpart, with how it was matched. Each ID
+is given twice: in text form (`orig_id`, `new_id`, for example `_1002_1`) and as the plain primary key
+(`orig_pk1`, `new_pk1`, for example `1002`), with the table it's from (`id_table`: `course_main` or
+`gradebook_main`). The key at the end of `batch_summary.md` explains every column.
 
 | Status | Meaning |
 |---|---|
@@ -348,7 +351,7 @@ Each run writes two folders:
   data/        one CSV per query: grade, attempt and SCORM records by internal key
 
 ~/convscan/reports/batch01_post/    reports_dir: what gets shared
-  *_handoff.md, batch_summary.md, idmap.csv
+  *_handoff.md, batch_summary.md (ends with the key: where each value comes from), idmap.csv
   run.json     a copy, so a report can be traced to its run (no learner data in it)
 ```
 

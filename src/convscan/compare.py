@@ -732,15 +732,39 @@ def check_inactive_records(p: Pair):
 
 
 def check_hidden_columns(p: Pair):
-    """Grade columns hidden in the Original that are visible in Ultra (S4 through M2)."""
+    """Grade columns hidden in the Original that learners can see in Ultra (S4 through M2): either
+    marked visible, or still marked hidden but attached to an item learners can open, which in
+    Ultra shows the column too."""
     if not (p.both("S4") and "M2" in p.ran_post):
         return
-    new_vis = {r["col_pk"]: r.get("visible_ind") for r in p.copy("S4")}
-    shown = [m["title"] for m in column_map(p.post, p.o).values()
-             if m.get("visible_ind") == "N" and new_vis.get(m.get("new_col_pk")) == "Y"]
+    copy_cols = {r["col_pk"]: r for r in p.copy("S4")}
+    # The attached item's availability: from S4 when the scan has it, else from the copy's tree.
+    tree_avail = {r.get("content_pk"): r.get("available_ind") for r in p.copy("S3b")}
+
+    def item_available(col):
+        if col.get("content_pk") in (None, ""):
+            return None
+        return col.get("item_available") or tree_avail.get(col.get("content_pk"))
+
+    shown, follows_item = [], []
+    for m in column_map(p.post, p.o).values():
+        if m.get("visible_ind") != "N":
+            continue
+        col = copy_cols.get(m.get("new_col_pk"))
+        if not col:
+            continue
+        if col.get("visible_ind") == "Y":
+            shown.append(m["title"])
+        elif item_available(col) == "Y":
+            follows_item.append(m["title"])   # marked hidden, but Ultra shows it with its item
     if shown:
         p.add("Grades", "Hidden columns now visible", len(shown), len(shown), ACTION,
               "Decide whether to hide, remove or keep: " + _list(shown))
+    if follows_item:
+        p.add("Grades", "Hidden columns that learners see with their item", len(follows_item), len(follows_item),
+              EXPECTED, "Hidden in the Original, but attached to an item learners can open. In Ultra a column shows "
+              "whenever its item does, so learners see these scores; they can't be hidden without hiding the item: "
+              + _list(follows_item))
 
 
 CHECKS = (check_copy_task, check_members, check_content_counts, check_content_types, check_nesting,
@@ -766,6 +790,7 @@ def id_map(o: str, n: str, base: dict, post: dict) -> list[dict]:
     """The course row, every Original column with its match, and columns that exist only in Ultra."""
     o_pk, n_pk = _one(base, "S1", o).get("crs_pk"), _one(post, "S1", n).get("crs_pk")
     rows = [{"orig_course_id": o, "new_course_id": n, "orig_id": _ext(o_pk), "new_id": _ext(n_pk),
+             "orig_pk1": o_pk or "", "new_pk1": n_pk or "", "id_table": "course_main",
              "kind": "course", "title": _one(base, "S1", o).get("course_name", ""), "attached_item": "",
              "match_status": "matched" if n_pk else "not found"}]
     mapped = set()
@@ -777,11 +802,14 @@ def id_map(o: str, n: str, base: dict, post: dict) -> list[dict]:
         elif status == "not found" and _DEFAULT_TOTAL.search(m.get("title") or ""):
             status = "removed in Ultra (default total, nothing graded)"
         rows.append({"orig_course_id": o, "new_course_id": n, "orig_id": _ext(m["orig_col_pk"]),
-                     "new_id": _ext(m.get("new_col_pk")), "kind": "grade column", "title": m.get("title", ""),
+                     "new_id": _ext(m.get("new_col_pk")), "orig_pk1": m["orig_col_pk"],
+                     "new_pk1": m.get("new_col_pk") or "", "id_table": "gradebook_main",
+                     "kind": "grade column", "title": m.get("title", ""),
                      "attached_item": m.get("content_title") or "", "match_status": status})
     for r in _rows(post, "S4", n):
         if r["col_pk"] not in mapped:
             rows.append({"orig_course_id": o, "new_course_id": n, "orig_id": "", "new_id": _ext(r["col_pk"]),
+                         "orig_pk1": "", "new_pk1": r["col_pk"], "id_table": "gradebook_main",
                          "kind": "grade column", "title": r.get("title", ""),
                          "attached_item": r.get("content_title") or "", "match_status": "new in Ultra"})
     return rows

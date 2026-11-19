@@ -2,7 +2,7 @@
 
 **Prepared for:** Sample University | **Scan:** 2026-11-30 | **Batch:** sample_pre
 
-> Generated from the LMS reporting database by convscan 0.3.0. Figures are as of the scan. Severity: 1 blocks learners, 2 needs fixing, 3 improves the experience, 0 to check by hand.
+> Generated from the LMS reporting database by convscan 0.3.0. Figures are as of the scan. Severity: 1 blocks learners, 2 needs fixing, 3 improves the experience, 0 to check by hand. Where each value comes from (`table.field`): the key at the end of [batch_summary.md](batch_summary.md#where-each-value-comes-from).
 
 ## In short
 
@@ -38,7 +38,7 @@
 | **Test attempts open now** | Blocks learners | Yes | 1 attempt(s) are open in 1 test(s): Module 1 Quiz. An attempt still open at the freeze arrives in Ultra in progress. | Ask learners to submit before the freeze. Re-run this scan at the freeze. |
 | **Partial credit in tests that open the next step** | Blocks learners | Yes | 1 question(s) with partial credit are in tests whose score opens the next step. Conversion sets partial credit on wrong answers to 0%, so learners who haven't taken the test yet could score lower and be held back. | Restore the answer values in the Ultra copy before learners use it (scripted from the pre-conversion data). |
 | **Groups with members** | Needs fixing | Yes | 1 group(s) with members: Advanced Stream. Groups are not carried over. | Restore the groups and their members after the conversion (scripted). |
-| **Grade columns hidden from learners** | Needs fixing | Yes | 1 grade column(s) are hidden from learners today: Placement Test. Ultra can't hide a column separately from its item, so some may become visible. | Decide at hand-off whether each should be hidden, removed or left visible. |
+| **Hidden grade columns that learners will see** | Needs fixing | Yes | 1 grade column(s) are hidden from learners today but attached to items they can open: Placement Test. In Ultra a column shows whenever its item does, so learners will see these scores. They can't be hidden without hiding the item. | Agree whether learners seeing these scores is acceptable, and whether to tell them. Removing a column removes its grades. |
 | **Folders nested deeper than Ultra allows** | Needs fixing | Yes | 1 folder(s) or learning module(s) are nested too deep for this site's 3 levels of nested content in Ultra (a learning module, a folder, then content), holding 2 item(s) directly: Course Content / Unit 1 / Further Reading (2 item(s)). Conversion moves each one up to sit directly in its learning module, with those items, and a folder nested inside another comes out beside it rather than inside it, so the course's structure changes. Every item stays reachable, so this doesn't block learners. With the additional nesting level (one more level; the site setting can't be undone), 0 of these would still move. | Ultra can't hold them at their old depth, so to restore the structure, remove a level above them (for example a content area that only groups others), then move them back; the hand-off report lists where each one landed. Or flatten them in the Original before the conversion. Or decide on the additional nesting level first. |
 | **Partial credit in graded tests** | Needs fixing | Yes | 1 question(s) give partial credit for some wrong answers. Conversion sets those answers to 0%. Tests: Placement Test. | Restore the answer values in the Ultra copy (scripted from the pre-conversion data). |
 | **Tests that draw questions from an undeployed test** | Needs fixing | No | 5 question(s) are drawn from 1 undeployed test(s) by: Module 1 Quiz. This site turns undeployed tests into question banks on conversion, and Blackboard's help says those banks lose random blocks, question sets and linked questions, so these tests may draw fewer questions in Ultra. | Check the hand-off report's count of drawn questions. If it drops, point the draws at the new question bank in the Ultra copy. |
@@ -47,7 +47,7 @@
 
 ## Decisions needed
 
-1. **Grade columns hidden from learners:** Decide at hand-off whether each should be hidden, removed or left visible.
+1. **Hidden grade columns that learners will see:** Agree whether learners seeing these scores is acceptable, and whether to tell them. Removing a column removes its grades.
 2. **Folders nested deeper than Ultra allows:** Ultra can't hold them at their old depth, so to restore the structure, remove a level above them (for example a content area that only groups others), then move them back; the hand-off report lists where each one landed. Or flatten them in the Original before the conversion. Or decide on the additional nesting level first.
 
 ## Site conversion settings

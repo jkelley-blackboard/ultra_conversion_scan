@@ -2,7 +2,7 @@
 
 **Prepared for:** Sample University | **Scan:** 2026-11-30 | **Batch:** sample_pre
 
-> Generated from the LMS reporting database by convscan 0.3.0. Figures are as of the scan. Severity: 1 blocks learners, 2 needs fixing, 3 improves the experience, 0 to check by hand.
+> Generated from the LMS reporting database by convscan 0.3.0. Figures are as of the scan. Severity: 1 blocks learners, 2 needs fixing, 3 improves the experience, 0 to check by hand. Where each value comes from (`table.field`): the key at the end of [batch_summary.md](batch_summary.md#where-each-value-comes-from).
 
 ## In short
 

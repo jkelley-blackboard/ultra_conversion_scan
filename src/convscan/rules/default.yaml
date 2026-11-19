@@ -179,16 +179,28 @@ rules:
     says: "{value} tool link(s) (links to course tools such as Announcements or the Gradebook). Conversion drops them (seen in conversion testing)."
     action: Recreate the ones learners need in the Ultra copy, where most course tools are already in the course navigation.
 
-  - id: hidden_columns
-    title: Grade columns hidden from learners
+  - id: hidden_columns_shown
+    title: Hidden grade columns that learners will see
     source: S4
-    where: {visible_ind: "N"}
+    # In Ultra a column attached to an item shows to learners whenever the item does (seen in
+    # conversion testing); the copy keeps the column marked hidden, but that doesn't hide it.
+    where: {visible_ind: "N", item_available: "Y"}
     severity: 2
     known: true
     examples: title
-    says: "{n} grade column(s) are hidden from learners today: {examples}. Ultra can't hide a column separately from its item, so some may become visible."
-    action: Decide at hand-off whether each should be hidden, removed or left visible.
+    says: "{n} grade column(s) are hidden from learners today but attached to items they can open: {examples}. In Ultra a column shows whenever its item does, so learners will see these scores. They can't be hidden without hiding the item."
+    action: Agree whether learners seeing these scores is acceptable, and whether to tell them. Removing a column removes its grades.
     decision: true
+
+  - id: hidden_columns_no_item
+    title: Hidden grade columns not attached to an item
+    source: S4
+    where: {visible_ind: "N", content_pk__null: true}
+    severity: 2
+    known: false
+    examples: title
+    says: "{n} grade column(s) are hidden from learners today and aren't attached to an item (totals, calculated or manual columns): {examples}."
+    action: Check each is still hidden in the Ultra copy, and hide it there if not.
 
   - id: forum_release_conditions
     title: Release conditions on discussions
