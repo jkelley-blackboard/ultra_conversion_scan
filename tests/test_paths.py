@@ -21,6 +21,16 @@ def test_name_goes_under_data_and_reports_dirs(tmp_path):
     assert reports_dir == tmp_path / "r" / "batch01_pre"
 
 
+def test_reports_by_date(tmp_path):
+    import datetime
+    cfg = _cfg(tmp_path, data_dir="d", reports_dir="r", reports_by_date=True)
+    run_dir, reports_dir = paths.resolve("2026-01-05_batch01_pre", cfg)
+    assert run_dir == tmp_path / "d" / "2026-01-05_batch01_pre"          # data stays flat
+    assert reports_dir == tmp_path / "r" / "2026-01-05" / "2026-01-05_batch01_pre"
+    today = datetime.date.today().isoformat()
+    assert paths.resolve("batch01_pre", cfg)[1] == tmp_path / "r" / today / "batch01_pre"
+
+
 def test_path_keeps_the_single_folder_layout(tmp_path):
     cfg = _cfg(tmp_path)
     run_dir, reports_dir = paths.resolve(str(tmp_path / "runs" / "b1"), cfg)

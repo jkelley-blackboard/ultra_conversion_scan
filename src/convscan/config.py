@@ -13,6 +13,8 @@ DEFAULTS = {
     "db": {"host": None, "port": 5432, "dbname": None, "user": None},   # never the password
     "data_dir": "~/convscan/data",         # learner-level CSVs and run.json: local, not synced
     "reports_dir": "~/convscan/reports",   # what gets shared
+    "reports_by_date": False,   # reports go in reports_dir/YYYY-MM-DD/<name>: the date the name starts
+                                # with, else today
     "prepared_for": "TODO institution name",
     "new_id_prefix": "",        # copy course_id = prefix + Original course_id + suffix; bulk copy
     "new_id_suffix": "-7777",   # and convert always puts a hyphen between the ID and either one

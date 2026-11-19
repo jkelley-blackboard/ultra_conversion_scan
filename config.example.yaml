@@ -12,6 +12,8 @@ data_dir: ~/convscan/data               # each run's data: learner-level CSVs an
                                         #   local, not synced or shared (convscan warns if it is).
 reports_dir: ~/convscan/reports         # each run's reports, idmap.csv and a copy of run.json: what
                                         #   gets shared. Relative paths are relative to this file.
+reports_by_date: false                  # true: reports_dir/YYYY-MM-DD/<name>, the date the run name
+                                        #   starts with, else today
 
 prepared_for: TODO institution name     # shown at the top of each report
 new_id_prefix: ""                       # copy course_id = prefix + Original course_id + suffix. Bulk

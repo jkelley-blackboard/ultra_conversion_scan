@@ -60,7 +60,7 @@ with need(t, c) as (values
  ('course_main','course_id'),('course_main','ultra_status'),('course_main','available_ind'),('course_main','row_status'),
  ('course_users','role'),('course_users','available_ind'),('course_users','last_access_date'),('course_users','row_status'),
  ('course_contents','cnthndlr_handle'),('course_contents','available_ind'),('course_contents','main_data'),('course_contents','web_url'),
- ('course_contents','parent_pk1'),
+ ('course_contents','parent_pk1'),('course_contents_files','course_contents_pk1'),
  ('gradebook_main','calculated_ind'),('gradebook_main','visible_ind'),('gradebook_main','visible_in_book_ind'),('gradebook_main','deleted_ind'),
  ('gradebook_main','qti_asi_data_pk1'),('gradebook_main','course_contents_pk1'),('gradebook_main','user_created_ind'),
  ('gradebook_grade','manual_score'),('gradebook_grade','last_attempt_pk1'),('gradebook_grade','highest_attempt_pk1'),
@@ -275,6 +275,56 @@ left join lateral (
   select count(*) as items_here
   from course_contents u
   where u.parent_pk1 = d.pk1 and u.cnthndlr_handle not in ('resource/x-bb-folder', 'resource/x-bb-lesson')) b on true
+order by d.course_id, d.path;
+
+
+-- ===========================================================================
+-- S3e. Folder and learning module descriptions, in Original courses only, with what each holds
+--      beyond plain text. The site setting "folder and learning module descriptions become
+--      documents" (S14; on when unset, as Ultra Experience Management shows it) decides what
+--      conversion does: on, each description becomes a document inside its folder, keeping its
+--      formatting; off, it stays a plain-text description of up to 750 characters, and
+--      formatting, links, images, embedded media and attached files are lost. One row per
+--      folder or learning module with a description (text, media or an attached file).
+-- ===========================================================================
+with recursive scope as ({SCOPE}),
+setting as (
+  select coalesce(max(r.registry_value), 'true') = 'true' as becomes_document
+  from system_registry r
+  where r.registry_key = 'ultraui.converting.folder.and.learning.module.descriptions.to.documents'),
+tree as (
+  select s.course_id, cc.pk1, cc.cnthndlr_handle, cc.main_data, cc.title::text as path
+  from scope s
+  join course_main cm     on cm.pk1 = s.crs_pk and coalesce(cm.ultra_status, 'C') = 'C'
+  join course_contents cc on cc.crsmain_pk1 = s.crs_pk
+  where cc.parent_pk1 is null
+  union all
+  select t.course_id, c.pk1, c.cnthndlr_handle, c.main_data, t.path || ' / ' || c.title
+  from tree t join course_contents c on c.parent_pk1 = t.pk1),
+d as (
+  select t.course_id, t.pk1 as content_pk, regexp_replace(t.path, '<[^>]*>', '', 'g') as path,
+    length(trim(regexp_replace(coalesce(t.main_data, ''), '<[^>]*>|&nbsp;', ' ', 'g'))) as text_length,
+    coalesce(t.main_data ~* '<(b|strong|i|em|u|ul|ol|table|h[1-6])[\s>]|style="', false) as has_formatting,
+    coalesce(t.main_data ~* '<a\s', false) as has_links,
+    coalesce(t.main_data ~* '<(img|iframe|video|embed|object)[\s>]', false) as has_media,
+    (select count(*) from course_contents_files f where f.course_contents_pk1 = t.pk1) as files
+  from tree t
+  where t.cnthndlr_handle in ('resource/x-bb-folder', 'resource/x-bb-lesson')
+    and t.path like '% / %'
+    and (length(trim(regexp_replace(coalesce(t.main_data, ''), '<[^>]*>|&nbsp;', '', 'g'))) > 0
+         or coalesce(t.main_data ~* '<(img|iframe|video|embed|object)[\s>]', false)
+         or exists (select 1 from course_contents_files f where f.course_contents_pk1 = t.pk1)))
+select d.*, st.becomes_document,
+  -- Lost with the setting off: anything beyond 750 characters of plain text.
+  (not st.becomes_document and (d.has_links or d.has_media or d.files > 0 or d.text_length > 750)) as loses_content,
+  (not st.becomes_document and d.has_formatting) as loses_formatting,
+  d.path || case when d.has_links or d.has_media or d.files > 0
+                 then ' (' || concat_ws(', ', case when d.has_links then 'links' end,
+                                        case when d.has_media then 'images or media' end,
+                                        case when d.files > 0 then d.files || ' file(s)' end) || ')'
+                 else '' end as label
+from d
+cross join setting st
 order by d.course_id, d.path;
 
 

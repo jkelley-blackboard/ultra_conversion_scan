@@ -10,6 +10,12 @@ import re
 from dataclasses import dataclass, field
 
 SAME, DIFFERENT, EXPECTED, ACTION, NOT_CHECKED = "same", "different", "expected", "action", "not checked"
+# Expected, should fix: conversion always does this and learners lose nothing, so it doesn't block
+# release, but it should be put right after the course opens (tier 2 in the pre-conversion report,
+# or tier 3 for wrapped items).
+EXPECTED_FIX = "expected fix"
+STATUSES = (SAME, EXPECTED, EXPECTED_FIX, DIFFERENT, ACTION, NOT_CHECKED)
+IMPROVEMENT = "Learners lose nothing, so this doesn't block release: fix it after the course opens."
 
 # Per-learner fields compared in S7. Scores compare within a small tolerance.
 S7_FIELDS = ("attempts", "submitted", "open", "needs_grading", "highest_attempt_score", "manual_score", "exempt_ind")
@@ -292,8 +298,67 @@ def check_nesting(p: Pair):
     note = (f"This site allows {limit} levels of nested content. Conversion moves each folder nested too deep up to "
             "sit directly in its learning module, with the items directly in it: see \"Folders moved up by "
             "conversion\" below for where each one is now.")
+    if ok == len(rows):
+        note += " " + IMPROVEMENT
     p.add("Content", "Folders moved up by conversion", len(rows), ok,
-          EXPECTED if ok == len(rows) else DIFFERENT, note, details=details)
+          EXPECTED_FIX if ok == len(rows) else DIFFERENT, note, details=details)
+
+
+_TEST_LINK = "resource/x-bb-asmt-test-link"
+
+
+def undeployed_tests_folder(p: Pair) -> list[dict]:
+    """Folders conversion adds at the top of the copy to hold the Original's undeployed tests: hidden,
+    holding only tests, with no container of that title in the Original. Returns their direct items."""
+    o_titles = {norm(r.get("title")) for r in p.orig("S3b") if r.get("cnthndlr_handle") in _CONTAINERS}
+    tree = p.copy("S3b")
+    items = []
+    for f in tree:
+        if (f.get("cnthndlr_handle") in _CONTAINERS and int(f.get("depth") or 0) == 1
+                and f.get("available_ind") == "N" and norm(f.get("title")) not in o_titles):
+            kids = [r for r in tree if r.get("parent_pk") == f.get("content_pk")]
+            if kids and all(r.get("cnthndlr_handle") == _TEST_LINK for r in kids):
+                items += [dict(r, folder_title=f.get("title")) for r in kids]
+    return items
+
+
+def _wrappers(tree) -> list[str]:
+    """Folders holding exactly one item of the same title: what conversion makes of a blank page or a
+    folder description ('Note' becomes folder 'Note' around document 'Note')."""
+    out = []
+    for f in tree:
+        if f.get("cnthndlr_handle") not in _CONTAINERS:
+            continue
+        kids = [r for r in tree if r.get("parent_pk") == f.get("content_pk")]
+        if (len(kids) == 1 and kids[0].get("cnthndlr_handle") not in _CONTAINERS
+                and norm(kids[0].get("title")) == norm(f.get("title"))):
+            out.append(re.sub(r"<[^>]*>", "", f.get("title") or ""))
+    return out
+
+
+def check_added_folders(p: Pair):
+    """Folders conversion adds that a tidy course removes (S3b): the hidden folder of undeployed tests,
+    and single-item folders wrapped around a document."""
+    if not p.both("S3b"):
+        return
+    tests = undeployed_tests_folder(p)
+    if tests:
+        folders = sorted({t["folder_title"] for t in tests})
+        p.add("Content", "Undeployed tests in a hidden folder", 0, len(tests), EXPECTED_FIX,
+              f"Conversion put the Original's {len(tests)} undeployed test(s) in the hidden folder "
+              f"{_list(folders)}; any grade columns they have come with them. Learners can't see the folder. "
+              f"Keep it hidden or remove it. {IMPROVEMENT}")
+    copy_tree = p.copy("S3b")
+    if copy_tree and "parent_pk" in copy_tree[0]:
+        o_wrapped = _wrappers(p.orig("S3b"))
+        extra = list(_wrappers(copy_tree))
+        for t in o_wrapped:        # the Original's own single-item folders aren't conversion's doing
+            if t in extra:
+                extra.remove(t)
+        if extra:
+            p.add("Content", "Items wrapped in a folder by conversion", 0, len(extra), EXPECTED_FIX,
+                  f"Each sits in a folder of its own name, so learners open the folder, then the item: "
+                  f"{_list(extra)}. {IMPROVEMENT}")
 
 
 def check_availability(p: Pair):
@@ -354,7 +419,14 @@ def check_grade_columns(p: Pair):
         p.add("Grades", "Grade columns", ov, nv, EXPECTED,
               "Ultra drops the weighted total, and the default total column when nothing in the course is graded.")
     elif nv > ov:
-        p.add("Grades", "Grade columns", ov, nv, EXPECTED, "Extra columns in Ultra are listed in the ID map.")
+        undeployed = {t.get("content_pk") for t in undeployed_tests_folder(p)} if p.both("S3b") else set()
+        k = sum(1 for r in p.copy("S4") if r.get("content_pk") in undeployed and r.get("content_pk") is not None)
+        if k:
+            p.add("Grades", "Grade columns", ov, nv, EXPECTED_FIX,
+                  f"{k} column(s) belong to the undeployed tests conversion put in a hidden folder (hidden from "
+                  "learners); they go if that folder is removed. Extra columns are listed in the ID map.")
+        else:
+            p.add("Grades", "Grade columns", ov, nv, EXPECTED, "Extra columns in Ultra are listed in the ID map.")
     else:
         p.add("Grades", "Grade columns", ov, nv, DIFFERENT, "Missing columns are listed in the ID map as not found.")
 
@@ -671,7 +743,8 @@ def check_hidden_columns(p: Pair):
               "Decide whether to hide, remove or keep: " + _list(shown))
 
 
-CHECKS = (check_copy_task, check_members, check_content_counts, check_content_types, check_nesting, check_availability,
+CHECKS = (check_copy_task, check_members, check_content_counts, check_content_types, check_nesting,
+          check_added_folders, check_availability,
           check_grade_columns, check_groups, check_release_conditions, check_partial_credit,
           check_question_sources, check_question_types, check_test_exceptions, check_work_in_progress,
           check_learner_records, check_scorm, check_inactive_records, check_hidden_columns)

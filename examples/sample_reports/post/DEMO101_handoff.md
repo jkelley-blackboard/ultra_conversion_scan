@@ -10,8 +10,8 @@
 |---|---|
 | Course | DEMO101 → **DEMO101-7777** (Ultra) |
 | Learners | 4 members, 2 in progress |
-| Checks | 21 same, 4 expected changes, 0 different, 4 need action, 0 not checked |
-| Status | **4 item(s) need action before release** |
+| Checks | 21 same, 3 expected changes, 1 expected but should fix, 0 different, 4 need action, 0 not checked |
+| Status | **4 item(s) need action before release**; 1 item(s) to fix after release, which don't hold it up |
 
 ## Needs action before release
 
@@ -19,6 +19,12 @@
 - **Conditions carried over exactly:** 1 lost only their group(s), on: Advanced Readings. The group repair should restore these.
 - **Questions with partial-credit answer values:** 1 question(s) lost their answer values: run the partial-credit repair, then re-scan.
 - **Hidden columns now visible:** Decide whether to hide, remove or keep: Placement Test
+
+## Expected, should fix: not blockers
+
+Conversion always makes these changes, and learners lose nothing through them: every item is still there and still reachable, so they don't hold up release. They should still be put right after the course opens, so the Ultra course reads the way the Original did. The pre-conversion report lists the predictable ones under "Needs fixing" or "Improves the experience".
+
+- **Folders moved up by conversion:** This site allows 3 levels of nested content. Conversion moves each folder nested too deep up to sit directly in its learning module, with the items directly in it: see "Folders moved up by conversion" below for where each one is now. Learners lose nothing, so this doesn't block release: fix it after the course opens.
 
 ## Checks
 
@@ -36,7 +42,7 @@
 | Content | LTI tool links | 0 | 0 | Same |  |
 | Content | All items | 10 | 14 | Expected | Conversion adds folders. |
 | Content | Content types carried over | 5 | 5 | Same | Added by conversion: Document +2; Folder +2. |
-| Content | Folders moved up by conversion | 1 | 1 | Expected | This site allows 3 levels of nested content. Conversion moves each folder nested too deep up to sit directly in its learning module, with the items directly in it: see "Folders moved up by conversion" below for where each one is now. |
+| Content | Folders moved up by conversion | 1 | 1 | Expected, should fix | This site allows 3 levels of nested content. Conversion moves each folder nested too deep up to sit directly in its learning module, with the items directly in it: see "Folders moved up by conversion" below for where each one is now. Learners lose nothing, so this doesn't block release: fix it after the course opens. |
 | Content | Hidden items still hidden | 1 | 1 | Same |  |
 | Grades | Grade columns | 5 | 4 | Expected | Ultra drops the weighted total column. |
 | Groups | Groups in use | 1 | 0 | Needs action | Not carried over: Advanced Stream. Run the group repair, then re-scan. |

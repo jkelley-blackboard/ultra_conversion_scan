@@ -102,6 +102,7 @@ a row per learner and are the large ones. S7, S8b and S10 read only students in 
 | S3c | Every content type in the course, with how many items of each are hidden |
 | S3b | Every item with its folder path, availability and depth |
 | S3d | Folders and learning modules deeper than the site's nesting limit in Ultra (Original courses only) |
+| S3e | Folder and learning module descriptions (Original courses only): text length, formatting, links, media, attached files, and what the site's descriptions setting does with them |
 | S4 | Grade columns: type, attached item, visibility, calculated or not |
 | S5b | Questions with partial credit per course, by how their tests are used (route learners, open the next step, or just graded) |
 | S5c | Each partial-credit question's answer values: the repair list and its baseline |

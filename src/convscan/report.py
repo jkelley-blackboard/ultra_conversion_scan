@@ -53,19 +53,30 @@ _SETTINGS = {
 }
 
 
+# What a setting that's never been changed (no registry row) means, as Ultra Experience Management
+# shows it. A key that's absent isn't "not set" to the conversion: it runs with the default.
+_SETTING_DEFAULTS = {
+    "course.structure.max_level_of_nesting": "3 (default)",
+    "ultraui.converting.folder.and.learning.module.descriptions.to.documents": "Yes (default)",
+    "ultraui.converting.undeployed.tests.to.question.banks": "No (default)",
+}
+
+
 def site_settings(data: dict) -> list[dict]:
     """S14 rows as labeled settings, for the reports. Empty if S14 wasn't run."""
     have = {r["registry_key"]: r.get("registry_value") for r in data.get("S14", [])}
     if not have:
         return []
-    def show(v):
+    def show(v, key=None):
+        if v is None and key in _SETTING_DEFAULTS:
+            return _SETTING_DEFAULTS[key]
         if isinstance(v, str) and v.startswith("{"):   # a feature flag, stored as JSON
             try:
                 v = json.loads(v).get("value", v)
             except ValueError:
                 pass
         return {"true": "Yes", "false": "No", "none": "not set"}.get(str(v).lower(), v)
-    return [{"label": label, "value": show(have.get(k))} for k, label in _SETTINGS.items()]
+    return [{"label": label, "value": show(have.get(k), k)} for k, label in _SETTINGS.items()]
 
 
 def _env(templates: pathlib.Path) -> jinja2.Environment:
@@ -127,8 +138,7 @@ def render_post(run_dir: pathlib.Path, run: dict, data: dict, base_run: dict, ba
         all_diffs += diffs
         facts = course_facts(base, o)
         facts["new_course_id"] = n
-        statuses = {s: sum(1 for c in checks if c["status"] == s) for s in
-                    (compare.SAME, compare.EXPECTED, compare.DIFFERENT, compare.ACTION, compare.NOT_CHECKED)}
+        statuses = {s: sum(1 for c in checks if c["status"] == s) for s in compare.STATUSES}
         map_counts = {}
         for r in idmap:
             if r["kind"] == "grade column":

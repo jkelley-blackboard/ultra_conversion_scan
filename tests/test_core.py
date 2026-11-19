@@ -2,7 +2,7 @@
 from convscan import config, kit, rules
 from convscan.scope import Scope
 
-EXPECTED = ["S0", "S1", "S2", "S2b", "S3", "S3c", "S3b", "S3d", "S4", "S5b", "S5c", "S5d", "S5e", "S5f", "S6", "S7",
+EXPECTED = ["S0", "S1", "S2", "S2b", "S3", "S3c", "S3b", "S3d", "S3e", "S4", "S5b", "S5c", "S5d", "S5e", "S5f", "S6", "S7",
             "S8", "S8b", "S9", "S10", "S11", "S12", "S12b", "S13", "S14", "M2"]
 
 
@@ -203,7 +203,7 @@ def test_question_draw_note_follows_direction():
 
 
 def test_nesting_folder_found_higher_with_contents():
-    from convscan.compare import DIFFERENT, EXPECTED, check_nesting
+    from convscan.compare import DIFFERENT, EXPECTED_FIX, check_nesting
     F, L = "resource/x-bb-folder", "resource/x-bb-forumlink"
     deep = "Content / Unit 1 / Readings"   # a folder in a folder in a content area: level 3 of 3
     row = lambda c, pk, parent, title, path, depth, h: {"course_id": c, "content_pk": pk, "parent_pk": parent,
@@ -224,13 +224,74 @@ def test_nesting_folder_found_higher_with_contents():
     p = _pair(base, post)
     check_nesting(p)
     c = _status(p, "Folders moved up by conversion")
-    assert c["status"] == EXPECTED
+    assert c["status"] == EXPECTED_FIX and "doesn't block release" in c["note"]
     assert c["details"][0]["ultra_path"] == "Content / Readings" and c["details"][0]["ultra_level"] == 2
     assert c["details"][0]["items_ultra"] == 2
     post["S3b"] = post["S3b"][:2]      # one item lost on the way
     p = _pair(base, post)
     check_nesting(p)
     assert _status(p, "Folders moved up by conversion")["status"] == DIFFERENT
+
+
+def test_folders_added_by_conversion_should_be_fixed():
+    from convscan.compare import EXPECTED, EXPECTED_FIX, check_added_folders, check_grade_columns
+    F, D, T = "resource/x-bb-folder", "resource/x-bb-document", "resource/x-bb-asmt-test-link"
+    row = lambda c, pk, parent, title, depth, h, avail="Y": {"course_id": c, "content_pk": pk, "parent_pk": parent,
+                                                             "title": title, "depth": depth, "cnthndlr_handle": h,
+                                                             "available_ind": avail}
+    base = {"S3b": [row("C1", 1, 0, "Unit 1", 1, F), row("C1", 2, 1, "Note", 2, "resource/x-bb-blankpage")],
+            "S4": [{"course_id": "C1", "title": "Quiz"}]}
+    post = {"S3b": [row("U-C1", 11, 10, "Unit 1", 1, F), row("U-C1", 12, 11, "Note", 2, F),
+                    row("U-C1", 13, 12, "Note", 3, D),
+                    row("U-C1", 20, 10, "Undeployed Tests", 1, F, "N"),
+                    row("U-C1", 21, 20, "All Questions", 2, T), row("U-C1", 22, 20, "All Questions", 2, T)],
+            "S4": [{"course_id": "U-C1", "title": "Quiz", "content_pk": 30},
+                   {"course_id": "U-C1", "title": "Pool 1", "content_pk": 21},
+                   {"course_id": "U-C1", "title": "Pool 2", "content_pk": 22}]}
+    p = _pair(base, post)
+    check_added_folders(p)
+    check_grade_columns(p)
+    got = {c["check"]: c for c in p.checks}
+    assert got["Undeployed tests in a hidden folder"]["status"] == EXPECTED_FIX
+    assert got["Undeployed tests in a hidden folder"]["ultra"] == 2
+    assert got["Items wrapped in a folder by conversion"]["status"] == EXPECTED_FIX
+    assert got["Grade columns"]["status"] == EXPECTED_FIX and got["Grade columns"]["note"].startswith("2 column(s)")
+    post["S3b"] = post["S3b"][:3]       # no undeployed-tests folder: extra columns are plain Expected
+    p = _pair(base, post)
+    check_added_folders(p)
+    check_grade_columns(p)
+    assert _status(p, "Grade columns")["status"] == EXPECTED
+    assert "Undeployed tests in a hidden folder" not in {c["check"] for c in p.checks}
+
+
+def test_undeployed_tests_rule_follows_the_bank_setting():
+    from convscan.config import PACKAGE
+    doc = rules.load_rules(PACKAGE / "rules" / "default.yaml")
+    rows = [{"course_id": "C1", "becomes_bank": False, "drawing_tests": 0}] * 3
+    fired = lambda data: {f["id"] for f in rules.evaluate(doc, {"S5f": data}, "C1", {"S5f"}, {})[0]}
+    assert "undeployed_tests_hidden_folder" in fired(rows)
+    assert "undeployed_tests_hidden_folder" not in fired([dict(r, becomes_bank=True) for r in rows])
+
+
+def test_description_rules_follow_the_setting():
+    from convscan.config import PACKAGE
+    doc = rules.load_rules(PACKAGE / "rules" / "default.yaml")
+    fired = lambda data: {f["id"]: f["severity"] for f in rules.evaluate(doc, {"S3e": data}, "C1", {"S3e"}, {})[0]}
+    row = {"course_id": "C1", "label": "Unit 1", "has_formatting": True, "has_links": True}
+    on = fired([dict(row, becomes_document=True, loses_content=False, loses_formatting=False)])
+    off = fired([dict(row, becomes_document=False, loses_content=True, loses_formatting=True)])
+    assert on == {"descriptions_become_documents": 3}
+    assert off == {"descriptions_lose_content": 2, "descriptions_lose_formatting": 3}
+
+
+def test_hidden_items_and_wrapped_items():
+    from convscan.config import PACKAGE
+    doc = rules.load_rules(PACKAGE / "rules" / "default.yaml")
+    data = {"S3b": [{"course_id": "C1", "title": "Staff note", "available_ind": "N"}],
+            "S3c": [{"course_id": "C1", "cnthndlr_handle": "resource/x-bb-document", "items": 4}]}
+    got = {f["id"]: f for f in rules.evaluate(doc, data, "C1", {"S3b", "S3c"}, {})[0]}
+    assert got["hidden_items"]["severity"] == 0 and "Staff note" in got["hidden_items"]["says"]
+    assert got["documents_wrapped"]["severity"] == 3 and "scriptable" not in got["documents_wrapped"]["action"]
 
 
 def test_sums_placeholder_in_rule_text():

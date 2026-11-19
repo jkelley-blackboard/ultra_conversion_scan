@@ -8,7 +8,7 @@
 
 **No blocking items found by the scan.**
 - **Decisions needed:** 1 (listed at the end).
-- **Findings by severity:** Blocks learners 0, Needs fixing 0, Improves the experience 0, To check 1.
+- **Findings by severity:** Blocks learners 0, Needs fixing 0, Improves the experience 1, To check 1.
 
 ## The course
 
@@ -31,6 +31,7 @@
 
 | Risk | Severity | Known? | What the scan found | Action |
 |---|---|---|---|---|
+| **Items that conversion puts in a folder of their own** | Improves the experience | Yes | 2 item(s). Conversion puts each one in a folder of its own name, so learners open the folder, then the item. Nothing is lost. | Unwrap them after the conversion by moving each item up and removing its folder. |
 | **Work waiting to be graded** | To check | Yes | 1 submission(s) are waiting for a grader: none listed. They carry over and can be graded in Ultra. | Agree who grades them, and whether before the freeze or in Ultra. |
 
 ## Decisions needed
@@ -57,4 +58,7 @@ These site-wide settings decide how the course converts. Agree them before the f
 - Whether files linked from the Content Collection still exist.
 - Systems outside the LMS that store course or grade column IDs (give them the ID map from the hand-off report).
 - Each record of students who are unavailable or disabled: the scan counts their grades, attempts and SCORM records instead of reading them one by one.
+- Folder descriptions that lose links, media or files (S3e was not run).
+- Folder descriptions that lose their formatting (S3e was not run).
+- Folder descriptions that become documents (S3e was not run).
 - SCORM packages with a time limit (S6 was not run).

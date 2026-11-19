@@ -10,7 +10,7 @@
 |---|---|
 | Course | DEMO102 → **DEMO102-7777** (Ultra) |
 | Learners | 4 members, 2 in progress |
-| Checks | 25 same, 1 expected changes, 0 different, 0 need action, 0 not checked |
+| Checks | 25 same, 1 expected changes, 0 expected but should fix, 0 different, 0 need action, 0 not checked |
 | Status | **Ready to verify and release** |
 
 ## Checks

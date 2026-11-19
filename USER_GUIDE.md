@@ -307,7 +307,8 @@ a result:
 | Result | Meaning | What to do |
 |---|---|---|
 | Same | Matches the Original | Nothing |
-| Expected | Changed in a way conversion always changes it (the folders it adds, titles losing their formatting) | Nothing |
+| Expected | Changed in a way conversion always changes it (the extra folder levels it adds, titles losing their formatting) | Nothing |
+| Expected, should fix | Changed in a way conversion always changes it, with nothing lost for learners, but the course reads better once it's put back: folders moved up for nesting, items wrapped in a folder of their own name, undeployed tests in a hidden folder (and their grade columns) | Nothing before release. Fix it after the course opens. The report lists these in their own section, apart from what blocks release |
 | Different | Changed in a way that needs a look | Find out why before release |
 | Needs action | A known loss (groups to restore, answer values to re-enter) | Repair, then scan again |
 | Not checked | The data wasn't there to compare | Check another way, or rerun with the missing queries |
@@ -455,6 +456,7 @@ read from the config file's folder.
 | `db` | none | The connection: `host`, `port` (5432), `dbname`, `user`. Never the password |
 | `data_dir` | `~/convscan/data` | Where each run's data goes. Keep it local |
 | `reports_dir` | `~/convscan/reports` | Where each run's reports go |
+| `reports_by_date` | false | true puts each run's reports in a folder for its day, `reports_dir/YYYY-MM-DD/<name>`: the date the run name starts with (`2026-01-05_batch01_pre`), else today. The data folder stays flat |
 | `prepared_for` | `TODO institution name` | The name at the top of every report |
 | `new_id_prefix` | `""` (none) | Put before an Original's course ID to find its copy |
 | `new_id_suffix` | `-7777` | Added after an Original's course ID to find its copy |

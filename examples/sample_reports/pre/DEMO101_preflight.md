@@ -11,7 +11,7 @@
 - **Test attempts open now:** Ask learners to submit before the freeze. Re-run this scan at the freeze.
 - **Partial credit in tests that open the next step:** Restore the answer values in the Ultra copy before learners use it (scripted from the pre-conversion data).
 - **Decisions needed:** 2 (listed at the end).
-- **Findings by severity:** Blocks learners 3, Needs fixing 5, Improves the experience 0, To check 0.
+- **Findings by severity:** Blocks learners 3, Needs fixing 5, Improves the experience 1, To check 1.
 
 ## The course
 
@@ -39,14 +39,16 @@
 | **Partial credit in tests that open the next step** | Blocks learners | Yes | 1 question(s) with partial credit are in tests whose score opens the next step. Conversion sets partial credit on wrong answers to 0%, so learners who haven't taken the test yet could score lower and be held back. | Restore the answer values in the Ultra copy before learners use it (scripted from the pre-conversion data). |
 | **Groups with members** | Needs fixing | Yes | 1 group(s) with members: Advanced Stream. Groups are not carried over. | Restore the groups and their members after the conversion (scripted). |
 | **Grade columns hidden from learners** | Needs fixing | Yes | 1 grade column(s) are hidden from learners today: Placement Test. Ultra can't hide a column separately from its item, so some may become visible. | Decide at hand-off whether each should be hidden, removed or left visible. |
-| **Folders nested deeper than Ultra allows** | Needs fixing | Yes | 1 folder(s) or learning module(s) are nested too deep for this site's 3 levels of nested content in Ultra (a learning module, a folder, then content), holding 2 item(s) directly: Course Content / Unit 1 / Further Reading (2 item(s)). Conversion moves each one up to sit directly in its learning module, with those items, and a folder nested inside another comes out beside it rather than inside it, so the course's structure changes. With the additional nesting level (one more level; the site setting can't be undone), 0 of these would still move. | Check where each one lands in the Ultra copy (the hand-off report lists them), or flatten these folders in the Original before the conversion. Or decide on the additional nesting level first. |
+| **Folders nested deeper than Ultra allows** | Needs fixing | Yes | 1 folder(s) or learning module(s) are nested too deep for this site's 3 levels of nested content in Ultra (a learning module, a folder, then content), holding 2 item(s) directly: Course Content / Unit 1 / Further Reading (2 item(s)). Conversion moves each one up to sit directly in its learning module, with those items, and a folder nested inside another comes out beside it rather than inside it, so the course's structure changes. Every item stays reachable, so this doesn't block learners. With the additional nesting level (one more level; the site setting can't be undone), 0 of these would still move. | Ultra can't hold them at their old depth, so to restore the structure, remove a level above them (for example a content area that only groups others), then move them back; the hand-off report lists where each one landed. Or flatten them in the Original before the conversion. Or decide on the additional nesting level first. |
 | **Partial credit in graded tests** | Needs fixing | Yes | 1 question(s) give partial credit for some wrong answers. Conversion sets those answers to 0%. Tests: Placement Test. | Restore the answer values in the Ultra copy (scripted from the pre-conversion data). |
 | **Tests that draw questions from an undeployed test** | Needs fixing | No | 5 question(s) are drawn from 1 undeployed test(s) by: Module 1 Quiz. This site turns undeployed tests into question banks on conversion, and Blackboard's help says those banks lose random blocks, question sets and linked questions, so these tests may draw fewer questions in Ultra. | Check the hand-off report's count of drawn questions. If it drops, point the draws at the new question bank in the Ultra copy. |
+| **Items that conversion puts in a folder of their own** | Improves the experience | Yes | 3 item(s). Conversion puts each one in a folder of its own name, so learners open the folder, then the item. Nothing is lost. | Unwrap them after the conversion by moving each item up and removing its folder. |
+| **Items hidden from learners** | To check | No | 1 item(s) are hidden from learners: Instructor Notes. In conversion testing some hidden items came out visible. | Check each is still hidden in the Ultra copy before learners use it (the hand-off report lists any now visible). |
 
 ## Decisions needed
 
 1. **Grade columns hidden from learners:** Decide at hand-off whether each should be hidden, removed or left visible.
-2. **Folders nested deeper than Ultra allows:** Check where each one lands in the Ultra copy (the hand-off report lists them), or flatten these folders in the Original before the conversion. Or decide on the additional nesting level first.
+2. **Folders nested deeper than Ultra allows:** Ultra can't hold them at their old depth, so to restore the structure, remove a level above them (for example a content area that only groups others), then move them back; the hand-off report lists where each one landed. Or flatten them in the Original before the conversion. Or decide on the additional nesting level first.
 
 ## Site conversion settings
 
@@ -68,4 +70,7 @@ These site-wide settings decide how the course converts. Agree them before the f
 - Whether files linked from the Content Collection still exist.
 - Systems outside the LMS that store course or grade column IDs (give them the ID map from the hand-off report).
 - Each record of students who are unavailable or disabled: the scan counts their grades, attempts and SCORM records instead of reading them one by one.
+- Folder descriptions that lose links, media or files (S3e was not run).
+- Folder descriptions that lose their formatting (S3e was not run).
+- Folder descriptions that become documents (S3e was not run).
 - SCORM packages with a time limit (S6 was not run).

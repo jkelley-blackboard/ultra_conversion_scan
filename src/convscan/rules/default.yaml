@@ -209,8 +209,8 @@ rules:
     severity: 2
     known: true
     examples: label
-    says: "{n} folder(s) or learning module(s) are nested too deep for this site's {first[max_level]} levels of nested content in Ultra (a learning module, a folder, then content), holding {sums[items_here]} item(s) directly: {examples}. Conversion moves each one up to sit directly in its learning module, with those items, and a folder nested inside another comes out beside it rather than inside it, so the course's structure changes."
-    action: Check where each one lands in the Ultra copy (the hand-off report lists them), or flatten these folders in the Original before the conversion.
+    says: "{n} folder(s) or learning module(s) are nested too deep for this site's {first[max_level]} levels of nested content in Ultra (a learning module, a folder, then content), holding {sums[items_here]} item(s) directly: {examples}. Conversion moves each one up to sit directly in its learning module, with those items, and a folder nested inside another comes out beside it rather than inside it, so the course's structure changes. Every item stays reachable, so this doesn't block learners."
+    action: Ultra can't hold them at their old depth, so to restore the structure, remove a level above them (for example a content area that only groups others), then move them back; the hand-off report lists where each one landed. Or flatten them in the Original before the conversion.
     # The what-if for the additional nesting level. Turn off with nesting_what_if: false once the
     # site's setting has been decided.
     extra:
@@ -229,6 +229,28 @@ rules:
     examples: drawing_test_titles
     says: "{value} question(s) are drawn from {n} undeployed test(s) by: {examples}. This site turns undeployed tests into question banks on conversion, and Blackboard's help says those banks lose random blocks, question sets and linked questions, so these tests may draw fewer questions in Ultra."
     action: Check the hand-off report's count of drawn questions. If it drops, point the draws at the new question bank in the Ultra copy.
+
+  - id: undeployed_tests_hidden_folder
+    title: Undeployed tests that conversion puts in a hidden folder
+    source: S5f
+    # With "undeployed tests become question banks" off (the default), conversion deploys them as tests
+    # in a hidden folder at the top of the course, each with a grade column (seen in conversion testing).
+    where: {becomes_bank: false}
+    severity: 2
+    known: true
+    says: "{n} test(s) aren't deployed in the course. This site doesn't turn undeployed tests into question banks, so conversion puts them in a hidden folder at the top of the Ultra course, each with a grade column. Learners can't see them, so this doesn't block learners, but the extra columns appear in the ID map."
+    action: Keep the folder hidden or remove it after the conversion. Removing it removes the extra grade columns too.
+
+  - id: descriptions_lose_content
+    title: Folder descriptions that lose links, media or files
+    source: S3e
+    where: {loses_content: true}
+    severity: 2
+    known: false
+    examples: label
+    says: "{n} folder or learning module description(s) have links, images, embedded media, attached files or more than 750 characters: {examples}. This site keeps descriptions as plain text of up to 750 characters on conversion, so those are lost."
+    action: Recreate what learners need as items in the folder, or turn on the setting that converts descriptions to documents before the conversion.
+    decision: true
 
   - id: removed_content_types
     title: Content that conversion removes
@@ -303,6 +325,36 @@ rules:
     says: "{value} item(s) have display dates."
     action: Check the dates still make sense in Ultra.
 
+  - id: documents_wrapped
+    title: Items that conversion puts in a folder of their own
+    source: S3c
+    # Seen in conversion testing: every Original item (document) came out as a folder of the same
+    # name holding the document, in every course checked (23 of 23).
+    where: {cnthndlr_handle: resource/x-bb-document}
+    measure: sum(items)
+    severity: 3
+    known: true
+    says: "{value} item(s). Conversion puts each one in a folder of its own name, so learners open the folder, then the item. Nothing is lost."
+    action: Unwrap them after the conversion by moving each item up and removing its folder.
+
+  - id: descriptions_lose_formatting
+    title: Folder descriptions that lose their formatting
+    source: S3e
+    where: {loses_formatting: true}
+    severity: 3
+    known: false
+    says: "{n} folder or learning module description(s) use formatting (bold, italics, lists, tables, headings or styles). This site keeps descriptions as plain text on conversion, so the formatting is lost; the words are kept."
+    action: Check the descriptions still read well as plain text.
+
+  - id: descriptions_become_documents
+    title: Folder descriptions that become documents
+    source: S3e
+    where: {becomes_document: true}
+    severity: 3
+    known: false
+    says: "{n} folder or learning module description(s). This site turns each description into a document inside its folder on conversion, keeping its formatting, so each folder gains an item."
+    action: Remove the documents learners don't need after the conversion, or turn off the setting that converts descriptions to documents before the conversion.
+
   # --- To check: unknown, or can't be tested by the scan -------------------------------------
 
   - id: source_available
@@ -315,6 +367,18 @@ rules:
     # Originals in conversion testing, so the tool doesn't enforce the freeze: the process must.
     says: "The course is available to learners. Bulk copy and convert will still copy it, but work learners do in the Original after the copy isn't carried over."
     action: Make the course unavailable (closed) before the copy that carries learners over. This is a required step, not one the copy checks.
+
+  - id: hidden_items
+    title: Items hidden from learners
+    source: S3b
+    # In production conversions some items hidden in the Original came out visible; the cause
+    # isn't known yet, so every hidden item is listed for checking.
+    where: {available_ind: "N"}
+    severity: 0
+    known: false
+    examples: title
+    says: "{n} item(s) are hidden from learners: {examples}. In conversion testing some hidden items came out visible."
+    action: Check each is still hidden in the Ultra copy before learners use it (the hand-off report lists any now visible).
 
   - id: open_scorm_attempts
     title: SCORM attempts in progress

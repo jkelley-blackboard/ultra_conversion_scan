@@ -6,7 +6,9 @@ including learner-level records: it stays local and is deleted at sign-off. The 
 """
 from __future__ import annotations
 
+import datetime
 import pathlib
+import re
 
 # Folder names that mean "synced to a cloud service", compared case-insensitively.
 _SYNCED = ("onedrive", "dropbox", "google drive", "googledrive", "my drive", "icloud drive",
@@ -22,7 +24,11 @@ def resolve(name_or_path: str, cfg: dict) -> tuple[pathlib.Path, pathlib.Path]:
     p = pathlib.Path(name_or_path).expanduser()
     if p.is_absolute() or len(p.parts) > 1:
         return p, p / "reports"
-    return cfg["data_dir"] / p, cfg["reports_dir"] / p
+    reports = cfg["reports_dir"]
+    if cfg.get("reports_by_date"):   # one folder per day: the date the run name starts with, else today
+        m = re.match(r"\d{4}-\d{2}-\d{2}(?=_|$)", p.name)
+        reports = reports / (m.group(0) if m else datetime.date.today().isoformat())
+    return cfg["data_dir"] / p, reports / p
 
 
 def shared_location(path: pathlib.Path) -> str | None:

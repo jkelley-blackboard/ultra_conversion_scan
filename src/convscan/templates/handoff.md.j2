@@ -1,6 +1,7 @@
 {% set actions = checks | selectattr("status", "equalto", "action") | list %}
-{% set result = {"same": "Same", "expected": "Expected", "different": "Different", "action": "Needs action", "not checked": "Not checked"} %}
+{% set result = {"same": "Same", "expected": "Expected", "expected fix": "Expected, should fix", "different": "Different", "action": "Needs action", "not checked": "Not checked"} %}
 {% set different = checks | selectattr("status", "equalto", "different") | list %}
+{% set improvements = checks | selectattr("status", "equalto", "expected fix") | list %}
 # Conversion Hand-off Report: {{ c.course_id }}, {{ c.course_name }}
 
 **Prepared for:** {{ cfg.prepared_for }} | **Post-scan:** {{ run.finished[:10] }} | **Baseline:** {{ base_run.finished[:10] }} | **Batch:** {{ run.name }}
@@ -17,13 +18,23 @@
 |---|---|
 | Course | {{ c.course_id }} → **{{ c.new_course_id }}** (Ultra) |
 | Learners | {{ c.members | n }} members, {{ c.in_progress | n }} in progress |
-| Checks | {{ statuses["same"] }} same, {{ statuses["expected"] }} expected changes, {{ statuses["different"] }} different, {{ statuses["action"] }} need action, {{ statuses["not checked"] }} not checked |
-| Status | {% if actions %}**{{ actions | length }} item(s) need action before release**{% elif different %}**Review {{ different | length }} difference(s) before release**{% else %}**Ready to verify and release**{% endif %} |
+| Checks | {{ statuses["same"] }} same, {{ statuses["expected"] }} expected changes, {{ statuses["expected fix"] }} expected but should fix, {{ statuses["different"] }} different, {{ statuses["action"] }} need action, {{ statuses["not checked"] }} not checked |
+| Status | {% if actions %}**{{ actions | length }} item(s) need action before release**{% elif different %}**Review {{ different | length }} difference(s) before release**{% else %}**Ready to verify and release**{% endif %}{% if improvements %}; {{ improvements | length }} item(s) to fix after release, which don't hold it up{% endif %} |
 
 {% if actions %}
 ## Needs action before release
 
 {% for a in actions %}
+- **{{ a.check }}:** {{ a.note }}
+{% endfor %}
+
+{% endif %}
+{% if improvements %}
+## Expected, should fix: not blockers
+
+Conversion always makes these changes, and learners lose nothing through them: every item is still there and still reachable, so they don't hold up release. They should still be put right after the course opens, so the Ultra course reads the way the Original did. The pre-conversion report lists the predictable ones under "Needs fixing" or "Improves the experience".
+
+{% for a in improvements %}
 - **{{ a.check }}:** {{ a.note }}
 {% endfor %}
 
