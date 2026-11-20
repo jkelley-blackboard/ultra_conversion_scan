@@ -953,7 +953,8 @@ order by r.registry_key;
 --     Normalized before matching (all seen on demo 2026-11-14, comparing real conversions):
 --       * titles: conversion strips HTML from item titles ('<u>Chapter 1</u>' becomes
 --         'Chapter 1') and plain-texts typography (en and em dashes to hyphens, curly
---         quotes to straight), so tags, typography, case and repeated spaces are ignored,
+--         quotes to straight, French guillemets to angle brackets, seen in production
+--         2026-11-19), so tags, typography, case and repeated spaces are ignored,
 --       * type: an Original assignment (resource/x-bb-assignment) becomes an Ultra
 --         assessment (resource/x-bb-assessment), so the two count as the same type,
 --       * calculated: Original's T, W, M and so on all become C in Ultra, so only
@@ -964,9 +965,9 @@ o as (
   select p.orig_course_id, p.new_course_id, gm.pk1 as col_pk, gm.title, gm.score_provider_handle,
          gm.calculated_ind, gm.visible_ind, gm.visible_in_book_ind, cc.title as content_title, cc.cnthndlr_handle,
          par.title as parent_title,
-         lower(trim(translate(regexp_replace(regexp_replace(cc.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g'), '–—‘’“”', '--''''""')))  as c_norm,
-         lower(trim(translate(regexp_replace(regexp_replace(par.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g'), '–—‘’“”', '--''''""'))) as p_norm,
-         lower(trim(translate(regexp_replace(regexp_replace(gm.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g'), '–—‘’“”', '--''''""')))  as t_norm,
+         lower(trim(regexp_replace(regexp_replace(translate(cc.title, '–—‘’“”«»', '--''''""<>'), '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as c_norm,
+         lower(trim(regexp_replace(regexp_replace(translate(par.title, '–—‘’“”«»', '--''''""<>'), '<[^>]*>', '', 'g'), '\s+', ' ', 'g'))) as p_norm,
+         lower(trim(regexp_replace(regexp_replace(translate(gm.title, '–—‘’“”«»', '--''''""<>'), '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as t_norm,
          replace(coalesce(gm.score_provider_handle, ''), 'resource/x-bb-assignment', 'resource/x-bb-assessment') as h_norm,
          coalesce(gm.calculated_ind, 'N') <> 'N' as is_calc
   from pairs p
@@ -977,9 +978,9 @@ o as (
 n as (
   select p.new_course_id, gm.pk1 as col_pk, gm.title, gm.score_provider_handle, gm.calculated_ind,
          gm.visible_ind, gm.visible_in_book_ind, cc.title as content_title, cc.cnthndlr_handle, par.title as parent_title,
-         lower(trim(translate(regexp_replace(regexp_replace(cc.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g'), '–—‘’“”', '--''''""')))  as c_norm,
-         lower(trim(translate(regexp_replace(regexp_replace(par.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g'), '–—‘’“”', '--''''""'))) as p_norm,
-         lower(trim(translate(regexp_replace(regexp_replace(gm.title, '<[^>]*>', '', 'g'), '\s+', ' ', 'g'), '–—‘’“”', '--''''""')))  as t_norm,
+         lower(trim(regexp_replace(regexp_replace(translate(cc.title, '–—‘’“”«»', '--''''""<>'), '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as c_norm,
+         lower(trim(regexp_replace(regexp_replace(translate(par.title, '–—‘’“”«»', '--''''""<>'), '<[^>]*>', '', 'g'), '\s+', ' ', 'g'))) as p_norm,
+         lower(trim(regexp_replace(regexp_replace(translate(gm.title, '–—‘’“”«»', '--''''""<>'), '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as t_norm,
          replace(coalesce(gm.score_provider_handle, ''), 'resource/x-bb-assignment', 'resource/x-bb-assessment') as h_norm,
          coalesce(gm.calculated_ind, 'N') <> 'N' as is_calc
   from pairs p

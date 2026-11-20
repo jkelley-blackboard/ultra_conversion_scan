@@ -295,6 +295,39 @@ def test_undeployed_tests_explain_extra_tests_and_questions():
     assert _status(p, "Questions in tests")["status"] == DIFFERENT
 
 
+def test_items_match_across_content_area_conversion_and_entities():
+    """A content area (folder) becomes a learning module; titles with HTML entities match their plain
+    form; an empty content area that conversion drops is Expected, not missing."""
+    from convscan.compare import EXPECTED, check_availability
+    F, L, D = "resource/x-bb-folder", "resource/x-bb-lesson", "resource/x-bb-document"
+    row = lambda c, pk, parent, title, h: {"course_id": c, "content_pk": pk, "parent_pk": parent, "title": title,
+                                           "cnthndlr_handle": h, "available_ind": "Y"}
+    base = {"S3b": [row("C1", 1, None, "Course Content", F), row("C1", 2, 1, "Exam Q&amp;A", D),
+                    row("C1", 3, None, "Old Area", F), row("C1", 4, 1, "Opérations « boîte »", D),
+                    row("C1", 5, 1, "Exam info", "resource/x-bb-toollink")]}
+    post = {"S3b": [row("U-C1", 10, None, "ROOT", F), row("U-C1", 11, 10, "Course Content", L),
+                    row("U-C1", 12, 11, "Exam Q&A", D), row("U-C1", 13, 11, "Opérations < boîte >", D)]}
+    p = _pair(base, post)
+    check_availability(p)
+    checks = {c["check"]: c for c in p.checks}
+    assert "Items not found by title in Ultra" not in checks
+    assert checks["Empty folders not carried over"]["status"] == EXPECTED
+    assert "Old Area" in checks["Empty folders not carried over"]["note"]
+
+
+def test_named_learner_conditions_in_a_copy_without_students():
+    from convscan.compare import DIFFERENT, EXPECTED, check_release_conditions
+    crit = lambda c, users: {"course_id": c, "item_title": "All Questions", "crit_type": "ACL", "negate_ind": "N",
+                             "users_named": users, "users_named_count": 1 if users else 0}
+    base, post = {"S9": [crit("C1", "123")]}, {"S9": [crit("U-C1", "")]}
+    p = _pair(base, post, students_copied=False)
+    check_release_conditions(p)
+    assert _status(p, "Conditions carried over exactly")["status"] == EXPECTED
+    p = _pair(base, post)                                # copied with learners: a real difference
+    check_release_conditions(p)
+    assert _status(p, "Conditions carried over exactly")["status"] == DIFFERENT
+
+
 def test_undeployed_tests_rule_follows_the_bank_setting():
     from convscan.config import PACKAGE
     doc = rules.load_rules(PACKAGE / "rules" / "default.yaml")

@@ -48,13 +48,13 @@
 
 ## ID map
 
-Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`. The course row's IDs are `course_main.pk1`. A grade column's IDs are `gradebook_main.pk1`, the grade column ID; its attached item, the test or SCORM package in the course, has its own content ID, `course_contents.pk1`.
+Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`, with the same columns. IDs are the numeric primary keys as stored in the database: `pk1` is `course_main.pk1` on the course row and `gradebook_main.pk1` on a grade column row; `course_contents_pk1` is `gradebook_main.course_contents_pk1`, the item the column belongs to.
 
-| Kind | Original ID | Ultra ID | Title | Attached item | Item content ID: Original | Item content ID: Ultra | Match |
+| `table` | `orig_pk1` | `new_pk1` | `title` | `attached_item` | `orig_course_contents_pk1` | `new_course_contents_pk1` | `match_status` |
 |---|---|---|---|---|---|---|---|
-| course | _102_1 | _902_1 | Ethics in Practice |  |  |  | matched |
-| grade column | _1012_1 | _9012_1 | Final Test | Final Test | 10012 | 90012 | matched |
-| grade column | _1013_1 | _9013_1 | Case Study | Case Study | 10013 | 90013 | matched |
+| course_main | 102 | 902 | Ethics in Practice |  |  |  | matched |
+| gradebook_main | 1012 | 9012 | Final Test | Final Test | 10012 | 90012 | matched |
+| gradebook_main | 1013 | 9013 | Case Study | Case Study | 10013 | 90013 | matched |
 
 Grade columns by match: matched 2. An ambiguous or not-found column is resolved before hand-off; columns new in Ultra can be ignored.
 

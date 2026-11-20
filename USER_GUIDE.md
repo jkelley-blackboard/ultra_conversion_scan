@@ -322,13 +322,13 @@ the post-scan still compares the learners its baseline read.
 
 Conversion gives every course and grade column a new ID. Systems outside the LMS that store those IDs
 (a student records system, a certification platform) need the new ones. `idmap.csv` lists every
-Original course and grade column ID beside its Ultra counterpart, with how it was matched. Each ID
-is given twice: in text form (`orig_id`, `new_id`, for example `_1002_1`) and as the plain primary key
-(`orig_pk1`, `new_pk1`, for example `1002`), with the table it's from (`id_table`: `course_main` or
-`gradebook_main`). A grade column ID (`gradebook_main.pk1`) isn't the ID of the test or SCORM package
-it belongs to: that item has its own content ID (`course_contents.pk1`), given in `orig_content_pk1` and
-`new_content_pk1`. The course row also carries each course's external ID (`orig_batch_uid`,
-`new_batch_uid`). `REPORT_KEY.md` in the reports folder explains every column.
+Original course and grade column ID beside its Ultra counterpart, with how it was matched. It uses
+database names and numeric primary keys throughout, as DDA returns them: `orig_pk1` and `new_pk1`
+(for example `1002`) are `course_main.pk1` or `gradebook_main.pk1`, as the `table` column says. A
+grade column ID isn't the ID of the test or SCORM package it belongs to: that item's
+`course_contents.pk1` is in `orig_course_contents_pk1` and `new_course_contents_pk1`. The course row
+also carries each course's external ID (`orig_batch_uid`, `new_batch_uid`). For a REST call, write a
+`pk1` as `_<pk1>_1`. `REPORT_KEY.md` in the reports folder explains every column.
 
 | Status | Meaning |
 |---|---|

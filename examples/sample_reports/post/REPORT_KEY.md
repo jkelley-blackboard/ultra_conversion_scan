@@ -6,15 +6,15 @@ The tables are in the Blackboard LMS reporting database, read through Direct Dat
 
 ## IDs
 
-**Primary keys.** Every table has a numeric primary key, its `pk1` field. Blackboard LMS shows it in the REST API and in browser addresses as text: an underscore, the number, then `_1`. So `_1002_1` in a report is the row whose `pk1` is 1002. The number is what the database stores; the `_1` is part of the text form only.
+**Primary keys.** Every table has a numeric primary key, its `pk1` field. The reports and `idmap.csv` give every ID as that number, exactly as the database stores it and as DDA returns it (for example `1002`), so it can be joined straight to the tables.
 
 There are three kinds of primary key in these reports. Each belongs to a different table, and the same number in two tables means two different things:
 
 | ID | Field | What it identifies | Where it appears |
 |---|---|---|---|
-| **Course primary key** | `course_main.pk1` | The course | The course table, and the course row of the ID map (`_101_1`) |
-| **Grade column ID** | `gradebook_main.pk1` | A column in the Grade Center or gradebook: what scores are recorded against, and what an outside system reads grades from | Grade column rows of the ID map (`orig_id`, `new_id`, `orig_pk1`, `new_pk1`) |
-| **Content ID** | `course_contents.pk1` | An item in the course: a test link, SCORM package, assignment, folder or document | The ID map's `orig_content_pk1` and `new_content_pk1`, and `content_pk` in the data files |
+| **Course primary key** | `course_main.pk1` | The course | The top of each report, and the course row of the ID map (`table` = `course_main`) |
+| **Grade column ID** | `gradebook_main.pk1` | A column in the Grade Center or gradebook: what scores are recorded against (`gradebook_grade.gradebook_main_pk1`), and what an outside system reads grades from | Grade column rows of the ID map (`table` = `gradebook_main`, `orig_pk1`, `new_pk1`) |
+| **Content ID** | `course_contents.pk1` | An item in the course: a test link, SCORM package, assignment, folder or document | The ID map's `orig_course_contents_pk1` and `new_course_contents_pk1`, and `content_pk` in the data files |
 
 A grade column and its item are linked by `gradebook_main.course_contents_pk1`, which holds the item's content ID. Columns with no item (totals, calculated columns, columns made by hand) have no content ID. A test has a third ID of its own, `qti_asi_data.pk1` (`gradebook_main.qti_asi_data_pk1`), which the reports don't show.
 
@@ -26,7 +26,7 @@ Conversion gives every course, grade column and item a new primary key, so each 
 
 **Learners.** Learners appear only as `users_pk1` (`users.pk1`, the same in the Original and the copy) or `course_users.pk1` (the enrollment), never by name, username or email.
 
-**In the REST API.** The Blackboard LMS REST API names the same values differently. A course has three IDs:
+**In the REST API.** The Blackboard LMS REST API names the same values differently, and writes a primary key as text: an underscore, the number, then `_1` (`pk1` 1002 is `_1002_1`). The reports don't use that form. A course has three IDs:
 
 | REST field | Database field | Form | Example |
 |---|---|---|---|
@@ -38,25 +38,25 @@ Conversion gives every course, grade column and item a new primary key, so each 
 | Content `id` | `course_contents.pk1` (the content ID) | `_1234_1` | |
 | User `id` | `users.pk1` (`users_pk1` in the data files) | `_1234_1` | |
 
-A course can be looked up by any of its three IDs: `/courses/_101_1`, `/courses/courseId:DEMO101` or `/courses/externalId:DEMO101`. In the reports and `idmap.csv`, the `_1234_1` form is the REST `id`; the plain number (`orig_pk1`, `new_pk1`) is the database field.
+A course can be looked up by any of its three IDs: `/courses/_101_1`, `/courses/courseId:DEMO101` or `/courses/externalId:DEMO101`. To use a `pk1` from the reports in a REST call, write it as `_<pk1>_1`.
 
 ## ID map
 
-`idmap.csv` holds every grade column in each Original, matched to its copy, plus one row for the course itself. The hand-off report shows the same rows for its course. Query M2 does the matching.
+`idmap.csv` holds every grade column in each Original, matched to its copy, plus one row for the course itself. The hand-off report shows the same rows, with the same column names, for its course. Query M2 does the matching. Columns starting `orig_` describe the Original; `new_`, the Ultra copy. Every ID is a numeric primary key, as stored in the database.
 
 | Column | Source |
 |---|---|
-| `orig_course_id` | `course_main.course_id` of the Original |
-| `new_course_id` | `course_main.course_id` of the copy |
+| `orig_course_id`, `new_course_id` | `course_main.course_id` |
 | `kind` | `course` for the course row, `grade column` for the others |
-| `id_table` | The table `orig_id`, `new_id`, `orig_pk1` and `new_pk1` are from: `course_main` on the course row, `gradebook_main` on a grade column row |
-| `orig_id`, `new_id` | The row's primary key in its text form: the course primary key (`course_main.pk1`) on the course row, the grade column ID (`gradebook_main.pk1`) on a grade column row |
-| `orig_pk1`, `new_pk1` | The same primary keys as plain numbers |
-| `orig_batch_uid`, `new_batch_uid` | `course_main.batch_uid` (the external ID), on the course row only |
-| `orig_content_pk1`, `new_content_pk1` | The content ID (`course_contents.pk1`) of the item the grade column belongs to, from `gradebook_main.course_contents_pk1`; blank for columns with no item |
+| `table` | The table `orig_pk1` and `new_pk1` belong to: `course_main` on the course row, `gradebook_main` on a grade column row |
+| `orig_pk1`, `new_pk1` | `course_main.pk1` on the course row; `gradebook_main.pk1` (the grade column ID) on a grade column row |
 | `title` | `course_main.course_name` on the course row; `gradebook_main.title` on a grade column row |
-| `attached_item` | `course_contents.title` of the item the column belongs to |
+| `orig_course_contents_pk1`, `new_course_contents_pk1` | `gradebook_main.course_contents_pk1`: the content ID (`course_contents.pk1`) of the item the column belongs to; blank for columns with no item |
+| `attached_item` | `course_contents.title` of that item |
+| `orig_batch_uid`, `new_batch_uid` | `course_main.batch_uid` (the external ID), on the course row only |
 | `match_status` | How the column was matched (below) |
+
+To read a learner's grades for a column in the copy, join on `gradebook_grade.gradebook_main_pk1` = `new_pk1`.
 
 **How columns are matched.** A grade column is matched to the copy by the item it belongs to, not by its own title:
 
@@ -71,7 +71,7 @@ Titles are compared without formatting, case, repeated spaces or curly quotes, b
 | `matched` | One column in the copy fits |
 | `matched (visibility tie-break)` | Several fit; one has the same visibility (`gradebook_main.visible_ind` and `visible_in_book_ind`) |
 | `matched (order tie-break)` | Several fit equally; they are paired in creation order (`gradebook_main.pk1`), which the copy keeps |
-| `ambiguous` | Several fit and can't be told apart; `new_id` is blank until resolved |
+| `ambiguous` | Several fit and can't be told apart; `new_pk1` is blank until resolved |
 | `not found` | No column in the copy fits |
 | `removed in Ultra (weighted total)` | Ultra doesn't keep the Weighted Total column |
 | `removed in Ultra (default total, nothing graded)` | Ultra drops the default Total when nothing in the course is graded |

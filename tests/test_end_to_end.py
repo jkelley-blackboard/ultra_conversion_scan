@@ -82,15 +82,17 @@ def test_id_map(tmp_path):
     assert compare._WEIGHTED.search("Total pondéré")   # the French name of the same column
     assert status[("DEMO102", "Case Study")] == "matched"
     course = next(r for r in rows if r["kind"] == "course" and r["orig_course_id"] == "DEMO101")
-    assert (course["new_id"], course["new_pk1"], course["id_table"]) == ("_901_1", "901", "course_main")
+    assert list(rows[0]) == list(compare.ID_MAP_COLUMNS)
+    assert (course["orig_pk1"], course["new_pk1"], course["table"]) == ("101", "901", "course_main")
     assert (course["orig_batch_uid"], course["new_batch_uid"]) == ("DEMO101", "DEMO101-7777")
     col = next(r for r in rows if r["title"] == "Module 1 Quiz")
-    assert (col["orig_pk1"], col["new_pk1"], col["id_table"]) == ("1002", "9002", "gradebook_main")
+    assert (col["orig_pk1"], col["new_pk1"], col["table"]) == ("1002", "9002", "gradebook_main")
     # The grade column ID and its item's content ID are different keys, in their own columns.
-    assert col["orig_content_pk1"] and col["new_content_pk1"] and col["orig_content_pk1"] != col["orig_pk1"]
-    assert col["orig_batch_uid"] == ""
+    assert col["orig_course_contents_pk1"] and col["orig_course_contents_pk1"] != col["orig_pk1"]
+    assert col["new_course_contents_pk1"] and col["orig_batch_uid"] == ""
     total = next(r for r in rows if r["title"] == "Total")
-    assert total["orig_content_pk1"] == "" and total["new_content_pk1"] == ""
+    assert total["orig_course_contents_pk1"] == "" and total["new_course_contents_pk1"] == ""
+    assert not any("_1" in r["orig_pk1"] + r["new_pk1"] for r in rows if r["orig_pk1"] or r["new_pk1"])   # numeric only
     handoff = (post / "DEMO101_handoff.md").read_text(encoding="utf-8")
     assert "External ID (`course_main.batch_uid`) | DEMO101 → DEMO101-7777" in handoff
 
@@ -103,7 +105,7 @@ def test_each_batch_has_a_report_key_for_its_reports(tmp_path):
         assert key.startswith("# Report Key:") and "course_main.batch_uid" in key and "—" not in key
     assert "## Findings" in pre_key and "## Hand-off checks" not in pre_key
     assert "## Hand-off checks" in post_key and "## ID map" in post_key and "## Findings" not in post_key
-    assert "course_contents.pk1" in post_key and "orig_content_pk1" in post_key
+    assert "course_contents.pk1" in post_key and "orig_course_contents_pk1" in post_key
     for out, report in ((pre, "DEMO101_preflight.md"), (post, "DEMO101_handoff.md"), (post, "batch_summary.md")):
         assert "(REPORT_KEY.md)" in (out / report).read_text(encoding="utf-8")
     assert "## IDs" not in (post / "batch_summary.md").read_text(encoding="utf-8")   # not repeated in the summary

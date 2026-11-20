@@ -6,15 +6,15 @@ The tables are in the Blackboard LMS reporting database, read through Direct Dat
 
 ## IDs
 
-**Primary keys.** Every table has a numeric primary key, its `pk1` field. Blackboard LMS shows it in the REST API and in browser addresses as text: an underscore, the number, then `_1`. So `_1002_1` in a report is the row whose `pk1` is 1002. The number is what the database stores; the `_1` is part of the text form only.
+**Primary keys.** Every table has a numeric primary key, its `pk1` field. The reports and `idmap.csv` give every ID as that number, exactly as the database stores it and as DDA returns it (for example `1002`), so it can be joined straight to the tables.
 
 There are three kinds of primary key in these reports. Each belongs to a different table, and the same number in two tables means two different things:
 
 | ID | Field | What it identifies | Where it appears |
 |---|---|---|---|
-| **Course primary key** | `course_main.pk1` | The course | The course table, and the course row of the ID map (`_101_1`) |
-| **Grade column ID** | `gradebook_main.pk1` | A column in the Grade Center or gradebook: what scores are recorded against, and what an outside system reads grades from | Grade column rows of the ID map (`orig_id`, `new_id`, `orig_pk1`, `new_pk1`) |
-| **Content ID** | `course_contents.pk1` | An item in the course: a test link, SCORM package, assignment, folder or document | The ID map's `orig_content_pk1` and `new_content_pk1`, and `content_pk` in the data files |
+| **Course primary key** | `course_main.pk1` | The course | The top of each report, and the course row of the ID map (`table` = `course_main`) |
+| **Grade column ID** | `gradebook_main.pk1` | A column in the Grade Center or gradebook: what scores are recorded against (`gradebook_grade.gradebook_main_pk1`), and what an outside system reads grades from | Grade column rows of the ID map (`table` = `gradebook_main`, `orig_pk1`, `new_pk1`) |
+| **Content ID** | `course_contents.pk1` | An item in the course: a test link, SCORM package, assignment, folder or document | The ID map's `orig_course_contents_pk1` and `new_course_contents_pk1`, and `content_pk` in the data files |
 
 A grade column and its item are linked by `gradebook_main.course_contents_pk1`, which holds the item's content ID. Columns with no item (totals, calculated columns, columns made by hand) have no content ID. A test has a third ID of its own, `qti_asi_data.pk1` (`gradebook_main.qti_asi_data_pk1`), which the reports don't show.
 
@@ -26,7 +26,7 @@ Conversion gives every course, grade column and item a new primary key, so each 
 
 **Learners.** Learners appear only as `users_pk1` (`users.pk1`, the same in the Original and the copy) or `course_users.pk1` (the enrollment), never by name, username or email.
 
-**In the REST API.** The Blackboard LMS REST API names the same values differently. A course has three IDs:
+**In the REST API.** The Blackboard LMS REST API names the same values differently, and writes a primary key as text: an underscore, the number, then `_1` (`pk1` 1002 is `_1002_1`). The reports don't use that form. A course has three IDs:
 
 | REST field | Database field | Form | Example |
 |---|---|---|---|
@@ -38,7 +38,7 @@ Conversion gives every course, grade column and item a new primary key, so each 
 | Content `id` | `course_contents.pk1` (the content ID) | `_1234_1` | |
 | User `id` | `users.pk1` (`users_pk1` in the data files) | `_1234_1` | |
 
-A course can be looked up by any of its three IDs: `/courses/_101_1`, `/courses/courseId:DEMO101` or `/courses/externalId:DEMO101`. In the reports and `idmap.csv`, the `_1234_1` form is the REST `id`; the plain number (`orig_pk1`, `new_pk1`) is the database field.
+A course can be looked up by any of its three IDs: `/courses/_101_1`, `/courses/courseId:DEMO101` or `/courses/externalId:DEMO101`. To use a `pk1` from the reports in a REST call, write it as `_<pk1>_1`.
 
 ## The course
 

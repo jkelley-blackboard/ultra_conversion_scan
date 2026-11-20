@@ -64,12 +64,12 @@ These folders or learning modules were nested deeper in the Original than the si
 {% endif %}
 ## ID map
 
-Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`. The course row's IDs are `course_main.pk1`. A grade column's IDs are `gradebook_main.pk1`, the grade column ID; its attached item, the test or SCORM package in the course, has its own content ID, `course_contents.pk1`.
+Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`, with the same columns. IDs are the numeric primary keys as stored in the database: `pk1` is `course_main.pk1` on the course row and `gradebook_main.pk1` on a grade column row; `course_contents_pk1` is `gradebook_main.course_contents_pk1`, the item the column belongs to.
 
-| Kind | Original ID | Ultra ID | Title | Attached item | Item content ID: Original | Item content ID: Ultra | Match |
+| `table` | `orig_pk1` | `new_pk1` | `title` | `attached_item` | `orig_course_contents_pk1` | `new_course_contents_pk1` | `match_status` |
 |---|---|---|---|---|---|---|---|
 {% for r in idmap[:25] %}
-| {{ r.kind }} | {{ r.orig_id }} | {{ r.new_id }} | {{ r.title | replace("|", "/") }} | {{ r.attached_item | replace("|", "/") }} | {{ r.orig_content_pk1 }} | {{ r.new_content_pk1 }} | {{ r.match_status }} |
+| {{ r.table }} | {{ r.orig_pk1 }} | {{ r.new_pk1 }} | {{ r.title | replace("|", "/") }} | {{ r.attached_item | replace("|", "/") }} | {{ r.orig_course_contents_pk1 }} | {{ r.new_course_contents_pk1 }} | {{ r.match_status }} |
 {% endfor %}
 {% if idmap | length > 25 %}
 | | | | ({{ idmap | length - 25 }} more rows in idmap.csv) | | | | |

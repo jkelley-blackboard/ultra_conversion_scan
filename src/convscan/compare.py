@@ -6,6 +6,7 @@ pair.add(), then list it in CHECKS.
 """
 from __future__ import annotations
 
+import html
 import re
 from dataclasses import dataclass, field
 
@@ -20,7 +21,7 @@ IMPROVEMENT = "Learners lose nothing, so this doesn't block release: fix it afte
 # Per-learner fields compared in S7. Scores compare within a small tolerance.
 S7_FIELDS = ("attempts", "submitted", "open", "needs_grading", "highest_attempt_score", "manual_score", "exempt_ind")
 
-_TYPO = str.maketrans({"–": "-", "—": "-", "‘": "'", "’": "'", "“": '"', "”": '"'})
+_TYPO = str.maketrans({"–": "-", "—": "-", "‘": "'", "’": "'", "“": '"', "”": '"', "«": "<", "»": ">"})
 
 # Ultra keeps one overall grade, so the Original's weighted total has no counterpart.
 _WEIGHTED = re.compile(r"weighted ?total|total pond[ée]r[ée]|OutcomeDefinition\.WeightedTotal", re.I)
@@ -45,7 +46,10 @@ _RENAMED_BY_CONVERSION = {"resource/x-bb-forumlink"}
 def norm(title) -> str:
     """Conversion strips HTML from titles ('<u>Chapter 1</u>' -> 'Chapter 1') and plain-texts dashes
     and curly quotes: compare without either. Matches the normalization in the M2 SQL."""
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]*>", "", str(title or "")).translate(_TYPO)).strip().lower()
+    # Typography first: conversion turns « » into < >, which then reads as a tag, so both sides must
+    # go through the same steps. Then tags, then entities (titles can hold &quot; and &amp;).
+    text = html.unescape(re.sub(r"<[^>]*>", "", str(title or "").translate(_TYPO)))
+    return re.sub(r"\s+", " ", text).strip().lower()
 
 
 def _rows(data, label, cid):
@@ -87,8 +91,9 @@ def _without_groups(sig: tuple) -> tuple:
     return sig[:9] + ("",) + sig[10:]
 
 
-def _ext(pk):
-    return f"_{pk}_1" if pk not in (None, "") else ""
+def _without_users(sig: tuple) -> tuple:
+    """The condition without its named learners (index 10)."""
+    return sig[:10] + ("",)
 
 
 def column_map(post: dict, orig_id: str) -> dict:
@@ -369,27 +374,41 @@ def check_added_folders(p: Pair):
 
 
 def check_availability(p: Pair):
-    """Anything hidden in the Original must stay hidden (S3b), matched by normalized title and type."""
+    """Anything hidden in the Original must stay hidden (S3b), matched by normalized title and type.
+    Folders and learning modules count as one type, because conversion turns content areas into
+    learning modules. An empty folder or content area missing from the copy is expected: conversion
+    doesn't carry empty containers over."""
     if not p.both("S3b"):
         return
+
+    def kind(r):
+        h = r.get("cnthndlr_handle")
+        return "container" if h in _CONTAINERS else _handler(h)
 
     def avail(rows):
         out = {}
         for r in rows:
-            if r.get("cnthndlr_handle") in _RENAMED_BY_CONVERSION:
+            # Renamed types compare elsewhere; dropped types (course and tool links) are reported as a
+            # known loss by "Content types carried over", so they aren't "not found" here too.
+            if r.get("cnthndlr_handle") in _RENAMED_BY_CONVERSION | _DROPPED_BY_CONVERSION:
                 continue
-            key = (norm(r.get("title")), _handler(r.get("cnthndlr_handle")))
+            key = (norm(r.get("title")), kind(r))
             y, n_ = out.get(key, (0, 0))
             out[key] = (y + (r.get("available_ind") != "N"), n_ + (r.get("available_ind") == "N"))
         return out
 
-    oa, na = avail(p.orig("S3b")), avail(p.copy("S3b"))
-    titles = {(norm(r.get("title")), _handler(r.get("cnthndlr_handle"))): re.sub(r"<[^>]*>", "", r.get("title") or "")
-              for r in p.orig("S3b")}
-    shown, hidden, missing = [], [], []
+    otree = p.orig("S3b")
+    oa, na = avail(otree), avail(p.copy("S3b"))
+    titles = {(norm(r.get("title")), kind(r)): html.unescape(re.sub(r"<[^>]*>", "", r.get("title") or ""))
+              for r in otree}
+    # Containers with nothing in them, by key (only when the scan has parent IDs).
+    parents = {r.get("parent_pk") for r in otree} if otree and "parent_pk" in otree[0] else None
+    empty = {(norm(r.get("title")), "container") for r in otree
+             if parents is not None and kind(r) == "container" and r.get("content_pk") not in parents}
+    shown, hidden, missing, empty_missing = [], [], [], []
     for key, (oy, on) in oa.items():
         if key not in na:
-            missing.append(titles[key])
+            (empty_missing if key in empty else missing).append(titles[key])
             continue
         ny, nn = na[key]
         if on and nn < on:
@@ -408,6 +427,9 @@ def check_availability(p: Pair):
     if missing:
         p.add("Content", "Items not found by title in Ultra", len(oa), len(oa) - len(missing), DIFFERENT,
               _list(missing) + ". Conversion may have renamed or merged these: check them.")
+    if empty_missing:
+        p.add("Content", "Empty folders not carried over", len(empty_missing), 0, EXPECTED,
+              "Empty in the Original, so conversion didn't create them: " + _list(empty_missing) + ".")
 
 
 def check_grade_columns(p: Pair):
@@ -479,7 +501,12 @@ def check_release_conditions(p: Pair):
     n_no_groups = {_without_groups(s) for s in n_sigs}
     lost = [r for s, r in o_sigs.items() if s not in n_sigs]
     group_only = [r for r in lost if r.get("groups_named") and _without_groups(_crit_sig(r)) in n_no_groups]
-    other = [r for r in lost if r not in group_only]
+    # Copied without students: a condition naming learners comes over naming none of them, because
+    # those learners aren't in the copy. Not a conversion loss; the copy with learners shows it.
+    n_no_users = {_without_users(s) for s in n_sigs}
+    users_only = [r for r in lost if r not in group_only and not p.students_copied and r.get("users_named")
+                  and _without_users(_crit_sig(r)) in n_no_users]
+    other = [r for r in lost if r not in group_only and r not in users_only]
     if not lost:
         p.add("Release conditions", "Conditions carried over exactly", len(o_sigs), len(o_sigs), SAME,
               "Same item, type, score range, dates, gate column, groups and named learners.")
@@ -490,8 +517,14 @@ def check_release_conditions(p: Pair):
     if group_only:
         note.append(f"{len(group_only)} lost only their group(s), on: "
                     + _list(sorted({r.get('item_title') for r in group_only})) + ". The group repair should restore these.")
+    if users_only:
+        note.append(f"{len(users_only)} lost only their named learners, on: "
+                    + _list(sorted({r.get('item_title') for r in users_only}))
+                    + ". Copied without students, so those learners aren't in the copy: check these again on "
+                    "the copy with learners.")
+    status = DIFFERENT if other else ACTION if group_only else EXPECTED
     p.add("Release conditions", "Conditions carried over exactly", len(o_sigs), len(o_sigs) - len(lost),
-          DIFFERENT if other else ACTION, " ".join(note))
+          status, " ".join(note))
 
 
 def check_partial_credit(p: Pair):
@@ -819,12 +852,18 @@ def id_map(o: str, n: str, base: dict, post: dict) -> list[dict]:
         v = side.get(str(col_pk)) if col_pk not in (None, "") else None
         return "" if v in (None, "") else v
 
-    rows = [{"orig_course_id": o, "new_course_id": n, "orig_id": _ext(o_pk), "new_id": _ext(n_pk),
-             "orig_pk1": o_pk or "", "new_pk1": n_pk or "", "id_table": "course_main",
-             "orig_batch_uid": o_s1.get("batch_uid") or "", "new_batch_uid": n_s1.get("batch_uid") or "",
-             "orig_content_pk1": "", "new_content_pk1": "",
-             "kind": "course", "title": o_s1.get("course_name", ""), "attached_item": "",
-             "match_status": "matched" if n_pk else "not found"}]
+    def row(**kw):
+        r = dict.fromkeys(ID_MAP_COLUMNS, "")
+        r.update(orig_course_id=o, new_course_id=n, **kw)
+        return r
+
+    def plain(title):
+        return re.sub(r"<[^>]*>", "", title or "")
+
+    rows = [row(kind="course", table="course_main", orig_pk1=o_pk or "", new_pk1=n_pk or "",
+                title=o_s1.get("course_name", ""),
+                orig_batch_uid=o_s1.get("batch_uid") or "", new_batch_uid=n_s1.get("batch_uid") or "",
+                match_status="matched" if n_pk else "not found")]
     mapped = set()
     for m in sorted(column_map(post, o).values(), key=lambda r: r["orig_col_pk"]):
         mapped.add(m.get("new_col_pk"))
@@ -833,21 +872,21 @@ def id_map(o: str, n: str, base: dict, post: dict) -> list[dict]:
             status = "removed in Ultra (weighted total)"
         elif status == "not found" and _DEFAULT_TOTAL.search(m.get("title") or ""):
             status = "removed in Ultra (default total, nothing graded)"
-        rows.append({"orig_course_id": o, "new_course_id": n, "orig_id": _ext(m["orig_col_pk"]),
-                     "new_id": _ext(m.get("new_col_pk")), "orig_pk1": m["orig_col_pk"],
-                     "new_pk1": m.get("new_col_pk") or "", "id_table": "gradebook_main",
-                     "orig_batch_uid": "", "new_batch_uid": "",
-                     "orig_content_pk1": item(o_item, m["orig_col_pk"]),
-                     "new_content_pk1": item(n_item, m.get("new_col_pk")),
-                     "kind": "grade column", "title": m.get("title", ""),
-                     "attached_item": re.sub(r"<[^>]*>", "", m.get("content_title") or ""), "match_status": status})
+        rows.append(row(kind="grade column", table="gradebook_main",
+                        orig_pk1=m["orig_col_pk"], new_pk1=m.get("new_col_pk") or "", title=m.get("title", ""),
+                        orig_course_contents_pk1=item(o_item, m["orig_col_pk"]),
+                        new_course_contents_pk1=item(n_item, m.get("new_col_pk")),
+                        attached_item=plain(m.get("content_title")), match_status=status))
     for r in _rows(post, "S4", n):
         if r["col_pk"] not in mapped:
-            rows.append({"orig_course_id": o, "new_course_id": n, "orig_id": "", "new_id": _ext(r["col_pk"]),
-                         "orig_pk1": "", "new_pk1": r["col_pk"], "id_table": "gradebook_main",
-                         "orig_batch_uid": "", "new_batch_uid": "",
-                         "orig_content_pk1": "", "new_content_pk1": item(n_item, r["col_pk"]),
-                         "kind": "grade column", "title": r.get("title", ""),
-                         "attached_item": re.sub(r"<[^>]*>", "", r.get("content_title") or ""),
-                         "match_status": "new in Ultra"})
+            rows.append(row(kind="grade column", table="gradebook_main", new_pk1=r["col_pk"],
+                            title=r.get("title", ""), new_course_contents_pk1=item(n_item, r["col_pk"]),
+                            attached_item=plain(r.get("content_title")), match_status="new in Ultra"))
     return rows
+
+
+# idmap.csv, in this order. Database names throughout: pk1 is the row's numeric primary key in `table`
+# (course_main or gradebook_main), as stored in the database and read through DDA.
+ID_MAP_COLUMNS = ("orig_course_id", "new_course_id", "kind", "table", "orig_pk1", "new_pk1", "title",
+                  "orig_course_contents_pk1", "new_course_contents_pk1", "attached_item",
+                  "orig_batch_uid", "new_batch_uid", "match_status")

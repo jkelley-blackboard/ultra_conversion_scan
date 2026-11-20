@@ -198,7 +198,7 @@ counts only.
 | What | Saved where | About learners |
 |---|---|---|
 | Reports, batch summary | `reports/` | Counts only. Titles of courses, items, columns and groups appear; group names are whatever the course author typed |
-| `idmap.csv` | `reports/` | Nothing: course and grade column IDs, in text form (`_1002_1`) and as plain `pk1` numbers with their table |
+| `idmap.csv` | `reports/` | Nothing: course and grade column IDs as numeric `pk1` values with their table, the items' `course_contents_pk1` and the courses' `batch_uid`, all under their database names |
 | `REPORT_KEY.md` | `reports/` | Nothing: where each value in that batch's reports comes from, as `table.field`, with the sections for the run type (pre or post). Share it with the reports. Template: [report_key.md.j2](src/convscan/templates/report_key.md.j2) |
 | `run.json` | Run folder | Nothing: courses, settings, row counts, timings, replica lag |
 | S7, S8b, S10, S12b, and S9's named users | `data/*.csv` | One row per learner by internal key: grades, attempts, group, test exceptions, SCORM location. S7, S8b and S10 cover students in progress only, unless `--all-learners` |

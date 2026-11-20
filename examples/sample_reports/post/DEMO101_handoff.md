@@ -72,16 +72,16 @@ These folders or learning modules were nested deeper in the Original than the si
 
 ## ID map
 
-Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`. The course row's IDs are `course_main.pk1`. A grade column's IDs are `gradebook_main.pk1`, the grade column ID; its attached item, the test or SCORM package in the course, has its own content ID, `course_contents.pk1`.
+Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`, with the same columns. IDs are the numeric primary keys as stored in the database: `pk1` is `course_main.pk1` on the course row and `gradebook_main.pk1` on a grade column row; `course_contents_pk1` is `gradebook_main.course_contents_pk1`, the item the column belongs to.
 
-| Kind | Original ID | Ultra ID | Title | Attached item | Item content ID: Original | Item content ID: Ultra | Match |
+| `table` | `orig_pk1` | `new_pk1` | `title` | `attached_item` | `orig_course_contents_pk1` | `new_course_contents_pk1` | `match_status` |
 |---|---|---|---|---|---|---|---|
-| course | _101_1 | _901_1 | Introduction to Portfolio Management |  |  |  | matched |
-| grade column | _1002_1 | _9002_1 | Module 1 Quiz | Module 1 Quiz | 10002 | 90002 | matched |
-| grade column | _1003_1 | _9003_1 | Placement Test | Placement Test | 10003 | 90003 | matched |
-| grade column | _1006_1 | _9006_1 | Module 1 Interactive | Module 1 Interactive | 10006 | 90006 | matched |
-| grade column | _1008_1 |  | Weighted Total |  |  |  | removed in Ultra (weighted total) |
-| grade column | _1009_1 | _9009_1 | Total |  |  |  | matched |
+| course_main | 101 | 901 | Introduction to Portfolio Management |  |  |  | matched |
+| gradebook_main | 1002 | 9002 | Module 1 Quiz | Module 1 Quiz | 10002 | 90002 | matched |
+| gradebook_main | 1003 | 9003 | Placement Test | Placement Test | 10003 | 90003 | matched |
+| gradebook_main | 1006 | 9006 | Module 1 Interactive | Module 1 Interactive | 10006 | 90006 | matched |
+| gradebook_main | 1008 |  | Weighted Total |  |  |  | removed in Ultra (weighted total) |
+| gradebook_main | 1009 | 9009 | Total |  |  |  | matched |
 
 Grade columns by match: matched 4, removed in Ultra (weighted total) 1. An ambiguous or not-found column is resolved before hand-off; columns new in Ultra can be ignored.
 
