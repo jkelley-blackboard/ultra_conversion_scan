@@ -6,6 +6,8 @@ import re
 
 import yaml
 
+from .compare import _rows   # one course's rows, from the batch's rows indexed once by course
+
 SEVERITY = {
     1: "Blocks learners",
     2: "Needs fixing",
@@ -111,7 +113,16 @@ def evaluate(doc: dict, data: dict[str, list[dict]], course_id: str, ran: set[st
         if src not in ran:
             not_checked.append({"id": rule["id"], "title": rule["title"], "reason": f"{src} was not run"})
             continue
-        rows = [r for r in data.get(src, []) if r.get("course_id") == course_id and matches(r, rule.get("where"))]
+        course_rows = _rows(data, src, course_id)
+        # requires: columns the rule needs. Rows saved by an earlier version may lack them; then the
+        # rule is not checked (and says why) rather than silently finding nothing.
+        lacking = [c for c in rule.get("requires", []) if course_rows and c not in course_rows[0]]
+        if lacking:
+            not_checked.append({"id": rule["id"], "title": rule["title"],
+                                "reason": f"{src} was saved by an earlier version without {', '.join(lacking)}: "
+                                          "scan again to check this"})
+            continue
+        rows = [r for r in course_rows if matches(r, rule.get("where"))]
         value = measure(rows, rule.get("measure", "count"))
         if not value > threshold:
             continue

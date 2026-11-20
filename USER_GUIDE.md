@@ -337,7 +337,8 @@ also carries each course's external ID (`orig_batch_uid`, `new_batch_uid`). For 
 | `ambiguous` | More than one candidate and no way to choose. Resolve by hand before hand-off |
 | `not found` | No column in the copy. Resolve before hand-off |
 | `removed in Ultra (weighted total)` | Ultra drops the weighted total column |
-| `new in Ultra` | A column only the copy has. Usually safe to ignore |
+| `removed in Ultra (default total, nothing graded)` | Ultra drops the default Total column when every column in the course is calculated, so there's nothing to total |
+| `new in Ultra` | A column only the copy has, for example for an undeployed test. Usually safe to ignore |
 
 ## Look after the data
 

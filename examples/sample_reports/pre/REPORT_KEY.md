@@ -92,7 +92,7 @@ Each finding in a report's "What to watch" is one rule applied to one query's ro
 | Release conditions on discussions | S9 | `avl_rule` on items with `cnthndlr_handle` `resource/x-bb-forumlink` |
 | Release conditions on calculated columns | S9 | `avl_crit.gradebook_main_pk1` pointing at a column with `gradebook_main.calculated_ind` other than `N` |
 | Release conditions that name individual learners | S9 | `avl_crit_acl_user` rows |
-| Hidden grade columns that learners will see | S4 | `gradebook_main.visible_ind` = `N`, and the attached item's `course_contents.available_ind` = `Y` |
+| Hidden grade columns that learners will see | S4 | `gradebook_main.visible_ind` = `N`, and the attached item can be reached: `item_reachable` = `Y`, meaning the item and every folder or learning module above it have `course_contents.available_ind` = `Y` |
 | Hidden grade columns not attached to an item | S4 | `gradebook_main.visible_ind` = `N`, and `gradebook_main.course_contents_pk1` empty |
 | Grade columns not attached to an item | S4 | `gradebook_main.course_contents_pk1` empty, not calculated (`calculated_ind`), not created by hand (`user_created_ind`) |
 | Folders nested deeper than Ultra allows | S3d | Depth from the `course_contents.parent_pk1` chain, against `system_registry` key `course.structure.max_level_of_nesting` |

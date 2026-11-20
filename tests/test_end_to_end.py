@@ -97,6 +97,33 @@ def test_id_map(tmp_path):
     assert "External ID (`course_main.batch_uid`) | DEMO101 → DEMO101-7777" in handoff
 
 
+def test_batch_uid_stays_text_when_loaded(tmp_path):
+    """An external ID that looks like a number keeps its leading zeros."""
+    import json
+    run_dir = tmp_path / "r"
+    (run_dir / "data").mkdir(parents=True)
+    (run_dir / "run.json").write_text(json.dumps({"name": "r", "queries": {}}), encoding="utf-8")
+    (run_dir / "data" / "S1.csv").write_text("course_id,crs_pk,batch_uid\n0042,7,00123\n", encoding="utf-8")
+    _, data = load_run(run_dir)
+    assert data["S1"][0]["batch_uid"] == "00123" and data["S1"][0]["course_id"] == "0042"
+
+
+def test_custom_templates_folder_falls_back_for_new_templates(tmp_path):
+    """A templates folder copied from an earlier version has no report_key.md.j2: the packaged one is used."""
+    import shutil
+    from convscan.config import PACKAGE
+    custom = tmp_path / "my_templates"
+    custom.mkdir()
+    for name in ("preflight.md.j2", "handoff.md.j2", "batch_summary.md.j2"):
+        shutil.copy(PACKAGE / "templates" / name, custom / name)
+    pre_dir, _ = sample_data.write_runs(tmp_path / "runs")
+    cfg = config.load(None)
+    cfg["templates"] = custom
+    pre_run, pre = load_run(pre_dir)
+    report.render_pre(pre_dir, pre_run, pre, cfg)
+    assert (pre_dir / "reports" / "REPORT_KEY.md").exists()
+
+
 def test_scan_times_show_hour_minute_and_offset(tmp_path):
     assert report.stamp("2026-11-19T10:35:16-05:00") == "2026-11-19 10:35 (UTC-05:00)"
     assert report.stamp("2026-11-19T15:35:16+00:00") == "2026-11-19 15:35 (UTC+00:00)"

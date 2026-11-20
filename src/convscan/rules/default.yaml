@@ -182,9 +182,10 @@ rules:
   - id: hidden_columns_shown
     title: Hidden grade columns that learners will see
     source: S4
+    requires: [item_reachable]
     # In Ultra a column attached to an item shows to learners whenever the item does (seen in
     # conversion testing); the copy keeps the column marked hidden, but that doesn't hide it.
-    where: {visible_ind: "N", item_available: "Y"}
+    where: {visible_ind: "N", item_reachable: "Y"}   # the item and every folder above it are visible
     severity: 2
     known: true
     examples: title
@@ -215,6 +216,7 @@ rules:
   - id: nesting_beyond_limit
     title: Folders nested deeper than Ultra allows
     source: S3d
+    requires: [items_here, moves_one_level_more, label]
     # An Original content area becomes level 1 in Ultra, and a container needs a level below it for
     # its content (see S3d). Conversion testing showed each such container moved up to sit directly
     # in its learning module with the items directly in it, nested ones coming out beside it.

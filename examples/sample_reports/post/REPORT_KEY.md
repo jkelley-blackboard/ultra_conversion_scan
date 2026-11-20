@@ -64,7 +64,7 @@ To read a learner's grades for a column in the copy, join on `gradebook_grade.gr
 2. If that finds none, the item's title and type.
 3. A column with no item (a total or a calculated column) is matched by its own title (`gradebook_main.title`) and whether it is calculated (`gradebook_main.calculated_ind`).
 
-Titles are compared without formatting, case, repeated spaces or curly quotes, because conversion strips those. An Original assignment counts as the same type as an Ultra assessment.
+Titles are compared without HTML tags, entities (`&amp;`, `&quot;`), case, repeated spaces or typography (dashes, curly quotes, and French guillemets, which conversion turns into `<` and `>`), because conversion changes those. An Original assignment counts as the same type as an Ultra assessment.
 
 | `match_status` | Meaning |
 |---|---|
@@ -127,10 +127,11 @@ Each check runs the same query on the Original (from the pre-conversion scan) an
 | Content | Folders moved up by conversion | S3d, S3b | Each too-deep folder found again in the copy by `course_contents.title`, with its depth and the items directly in it (`parent_pk1`) |
 | Content | Undeployed tests in a hidden folder | S3b | A hidden top-level folder (`available_ind` = `N`) in the copy that the Original doesn't have, holding tests |
 | Content | Items wrapped in a folder by conversion | S3b | Folders in the copy holding one item of the same `course_contents.title` |
+| Content | Empty folders not carried over | S3b | Folders and content areas with no children (`course_contents.parent_pk1`) in the Original that aren't in the copy |
 | Content | Hidden items still hidden, Hidden items now visible to learners, Visible items now hidden, Items not found by title in Ultra | S3b | `course_contents.available_ind`, items matched by `title` and `cnthndlr_handle` |
 | Grades | Grade columns | S4 | `gradebook_main` counts |
 | Grades | Hidden columns now visible | S4, M2 | `gradebook_main.visible_ind` of each matched column |
-| Grades | Hidden columns that learners see with their item | S4, M2 | `gradebook_main.visible_ind` = `N` on a column whose item has `course_contents.available_ind` = `Y` |
+| Grades | Hidden columns that learners see with their item | S4, M2 | `gradebook_main.visible_ind` = `N` on a column whose item learners can reach: the item and every folder above it have `course_contents.available_ind` = `Y` |
 | Groups | Groups, Groups in use | S8 | `groups.group_name`, with `group_users`, `avl_crit_acl_group` and `user_test_option` |
 | Release conditions | Gated items still gated | S9 | Items with an `avl_rule`, matched by `course_contents.title` |
 | Release conditions | Conditions carried over exactly | S9 | Each `avl_crit`: `crit_type`, `negate_ind`, `min_score`, `max_score`, `start_date`, `end_date`, the gate column's `gradebook_main.title`, the reviewed item, the groups and the named learners |

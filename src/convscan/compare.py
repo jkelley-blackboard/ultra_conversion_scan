@@ -6,8 +6,10 @@ pair.add(), then list it in CHECKS.
 """
 from __future__ import annotations
 
+import functools
 import html
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 
 SAME, DIFFERENT, EXPECTED, ACTION, NOT_CHECKED = "same", "different", "expected", "action", "not checked"
@@ -39,21 +41,66 @@ _HANDLER = {"resource/x-bb-assignment": "resource/x-bb-asmt-test-link", "resourc
 # Discussion links take the forum's own name in Ultra, so they can't be matched by title. Their number
 # is compared under "Discussion links", and their conditions in the release-condition checks.
 _RENAMED_BY_CONVERSION = {"resource/x-bb-forumlink"}
+_NOT_MATCHED_BY_TITLE = _RENAMED_BY_CONVERSION | _DROPPED_BY_CONVERSION
 
 
 # --- Helpers -------------------------------------------------------------------------------
 
+# A real HTML tag starts with a letter, / or ! ('<u>', '</u>', '<!-- -->'); '< boîte >' isn't one.
+_TAG = re.compile(r"<[A-Za-z/!][^>]*>")
+_WS = re.compile(r"\s+")
+
+
+def strip_tags(title) -> str:
+    return _TAG.sub("", str(title or ""))
+
+
+def plain(title) -> str:
+    """A title as a reader sees it: tags out, entities decoded ('Exam Q&amp;A' -> 'Exam Q&A')."""
+    return html.unescape(strip_tags(title))
+
+
+@functools.lru_cache(maxsize=None)
+def _norm(text: str) -> str:
+    return _WS.sub(" ", plain(text).translate(_TYPO)).strip().lower()
+
+
 def norm(title) -> str:
-    """Conversion strips HTML from titles ('<u>Chapter 1</u>' -> 'Chapter 1') and plain-texts dashes
-    and curly quotes: compare without either. Matches the normalization in the M2 SQL."""
-    # Typography first: conversion turns « » into < >, which then reads as a tag, so both sides must
-    # go through the same steps. Then tags, then entities (titles can hold &quot; and &amp;).
-    text = html.unescape(re.sub(r"<[^>]*>", "", str(title or "").translate(_TYPO)))
-    return re.sub(r"\s+", " ", text).strip().lower()
+    """A title for matching across a conversion. Conversion strips HTML ('<u>Chapter 1</u>' ->
+    'Chapter 1') and plain-texts typography, so compare without either. The same steps, in the same
+    order, as the M2 SQL: real tags out, entities decoded, typography, spaces collapsed, lower case.
+    Cached: the same titles come up many times per course."""
+    return _norm(str(title or ""))
+
+
+def _group(rows: list, key: str) -> dict:
+    """rows grouped by one field, built once per list and reused (a batch's rows by course, a
+    content tree's rows by parent). Rebuilt if the list grows."""
+    hit = _GROUPS.get((id(rows), key))
+    if hit is None or hit[0] is not rows or hit[1] != len(rows):
+        groups = {}
+        for r in rows:
+            groups.setdefault(r.get(key), []).append(r)
+        hit = (rows, len(rows), groups)
+        _GROUPS[(id(rows), key)] = hit
+    return hit[2]
+
+
+_GROUPS: dict = {}   # (id(list), key) -> (list, len, groups); holds the list so its id isn't reused
 
 
 def _rows(data, label, cid):
-    return [r for r in data.get(label, []) if r.get("course_id") == cid]
+    """One course's rows of a query, from the batch's rows (indexed once by course)."""
+    rows = data.get(label)
+    return _group(rows, "course_id").get(cid, []) if rows else []
+
+
+def _children(tree: list) -> dict | None:
+    """A content tree's rows by parent (parent_pk -> direct children), or None for runs saved before
+    S3b had parent IDs."""
+    if not tree or "parent_pk" not in tree[0]:
+        return None
+    return _group(tree, "parent_pk")
 
 
 def _one(data, label, cid):
@@ -87,18 +134,15 @@ def _crit_sig(r) -> tuple:
             norm(r.get("groups_named")), str(r.get("users_named") or ""))
 
 
-def _without_groups(sig: tuple) -> tuple:
-    return sig[:9] + ("",) + sig[10:]
+def _sig_without(sig: tuple, groups=False, users=False) -> tuple:
+    """A condition's signature with its groups (index 9) and/or named learners (index 10) blanked."""
+    return sig[:9] + ("" if groups else sig[9], "" if users else sig[10])
 
 
-def _without_users(sig: tuple) -> tuple:
-    """The condition without its named learners (index 10)."""
-    return sig[:10] + ("",)
-
-
-def column_map(post: dict, orig_id: str) -> dict:
+def column_map(post: dict, o: str) -> dict:
     """Original column pk -> its M2 row, for one course."""
-    return {r["orig_col_pk"]: r for r in post.get("M2", []) if r.get("orig_course_id") == orig_id}
+    rows = post.get("M2")
+    return {r["orig_col_pk"]: r for r in _group(rows, "orig_course_id").get(o, [])} if rows else {}
 
 
 # --- One Original and its copy -------------------------------------------------------------
@@ -115,6 +159,7 @@ class Pair:
     students_copied: bool = True                # False: copied without user activity (post --no-students)
     checks: list = field(default_factory=list)
     diffs: list = field(default_factory=list)   # per-learner differences, for data/diff_learner_records.csv
+    cache: dict = field(default_factory=dict, repr=False)   # values several checks share, worked out once
 
     def name(self, value) -> str:
         """A plain name for a system value, or its last part if there's no label."""
@@ -202,7 +247,7 @@ def check_content_counts(p: Pair):
         x["tests_assignments"] = (x.get("tests") or 0) + (x.get("assignments") or 0)
     # The Original's undeployed tests have no content item, so S3 doesn't count them; conversion adds one
     # for each, in a hidden folder. Those extra tests are expected, not a difference.
-    undeployed = len(undeployed_tests_folder(p)) if p.both("S3b") else 0
+    undeployed = len(undeployed_tests_folder(p))
     for col, label, exact in (("tests_assignments", "Tests and assignments", True),
                               ("scorm", "SCORM items", True), ("forum_links", "Discussion links", True),
                               ("lti_items", "LTI tool links", True), ("items", "All items", False)):
@@ -258,12 +303,10 @@ def check_nesting(p: Pair):
     otree, ntree = p.orig("S3b"), p.copy("S3b")
 
     def children(tree):
-        """content_pk -> direct children. By parent ID when the scan has it; else by path and depth
-        (older runs), which can mix up two folders that share a path."""
-        kids = {}
-        if tree and "parent_pk" in tree[0]:
-            for r in tree:
-                kids.setdefault(r.get("parent_pk"), []).append(r)
+        """node -> its direct children. By parent ID when the scan has it; else by path and depth
+        (runs saved before S3b had parent IDs), which can mix up two folders that share a path."""
+        kids = _children(tree)
+        if kids is not None:
             return lambda node: kids.get(node.get("content_pk"), [])
         return lambda node: [r for r in tree if str(r.get("path") or "").startswith(str(node.get("path")) + " / ")
                              and int(r.get("depth") or 0) == int(node.get("depth") or 0) + 1]
@@ -278,14 +321,17 @@ def check_nesting(p: Pair):
         return path[len("ROOT / "):] if path.startswith("ROOT / ") else path
 
     o_nodes = {r.get("content_pk"): r for r in otree}
-    n_folders = [r for r in ntree if _handler(r.get("cnthndlr_handle")) == "resource/x-bb-folder"]
+    n_folders = {}                               # the copy's folders by title
+    for r in ntree:
+        if _handler(r.get("cnthndlr_handle")) == "resource/x-bb-folder":
+            n_folders.setdefault(norm(r.get("title")), []).append(r)
     details, ok = [], 0
     for f in rows:
         node = o_nodes.get(f.get("content_pk")) or {"content_pk": f.get("content_pk"), "path": f.get("path"),
                                                      "depth": int(f.get("ultra_level") or 1) - 1}
         okids = o_kids(node)
         o_titles, o_items = {norm(r.get("title")) for r in okids}, items(okids)
-        cands = [r for r in n_folders if norm(r.get("title")) == norm(f.get("title"))]
+        cands = n_folders.get(norm(f.get("title")), [])
         # Best: most of the same direct children; then one that fits the limit; then the shallowest.
         best = max(cands, key=lambda r: (len({norm(k.get("title")) for k in n_kids(r)} & o_titles),
                                          int(r.get("depth") or 0) < limit, -int(r.get("depth") or 0)),
@@ -321,30 +367,39 @@ _TEST_LINK = "resource/x-bb-asmt-test-link"
 
 def undeployed_tests_folder(p: Pair) -> list[dict]:
     """Folders conversion adds at the top of the copy to hold the Original's undeployed tests: hidden,
-    holding only tests, with no container of that title in the Original. Returns their direct items."""
+    holding only tests, with no container of that title in the Original. Returns their direct items
+    (empty if S3b didn't run on both sides, or has no parent IDs). Worked out once per Pair."""
+    if "undeployed" not in p.cache:
+        p.cache["undeployed"] = _find_undeployed(p) if p.both("S3b") else []
+    return p.cache["undeployed"]
+
+
+def _find_undeployed(p: Pair) -> list[dict]:
     o_titles = {norm(r.get("title")) for r in p.orig("S3b") if r.get("cnthndlr_handle") in _CONTAINERS}
     tree = p.copy("S3b")
+    kids = _children(tree) or {}
     items = []
     for f in tree:
         if (f.get("cnthndlr_handle") in _CONTAINERS and int(f.get("depth") or 0) == 1
                 and f.get("available_ind") == "N" and norm(f.get("title")) not in o_titles):
-            kids = [r for r in tree if r.get("parent_pk") == f.get("content_pk")]
-            if kids and all(r.get("cnthndlr_handle") == _TEST_LINK for r in kids):
-                items += [dict(r, folder_title=f.get("title")) for r in kids]
+            inside = kids.get(f.get("content_pk"), [])
+            if inside and all(r.get("cnthndlr_handle") == _TEST_LINK for r in inside):
+                items += [dict(r, folder_title=f.get("title")) for r in inside]
     return items
 
 
 def _wrappers(tree) -> list[str]:
     """Folders holding exactly one item of the same title: what conversion makes of a blank page or a
     folder description ('Note' becomes folder 'Note' around document 'Note')."""
+    kids = _children(tree) or {}
     out = []
     for f in tree:
         if f.get("cnthndlr_handle") not in _CONTAINERS:
             continue
-        kids = [r for r in tree if r.get("parent_pk") == f.get("content_pk")]
-        if (len(kids) == 1 and kids[0].get("cnthndlr_handle") not in _CONTAINERS
-                and norm(kids[0].get("title")) == norm(f.get("title"))):
-            out.append(re.sub(r"<[^>]*>", "", f.get("title") or ""))
+        inside = kids.get(f.get("content_pk"), [])
+        if (len(inside) == 1 and inside[0].get("cnthndlr_handle") not in _CONTAINERS
+                and norm(inside[0].get("title")) == norm(f.get("title"))):
+            out.append(plain(f.get("title")))
     return out
 
 
@@ -361,7 +416,7 @@ def check_added_folders(p: Pair):
               f"{_list(folders)}; any grade columns they have come with them. Learners can't see the folder. "
               f"Keep it hidden or remove it. {IMPROVEMENT}")
     copy_tree = p.copy("S3b")
-    if copy_tree and "parent_pk" in copy_tree[0]:
+    if _children(copy_tree) is not None:
         o_wrapped = _wrappers(p.orig("S3b"))
         extra = list(_wrappers(copy_tree))
         for t in o_wrapped:        # the Original's own single-item folders aren't conversion's doing
@@ -381,30 +436,30 @@ def check_availability(p: Pair):
     if not p.both("S3b"):
         return
 
-    def kind(r):
+    def key(r):
         h = r.get("cnthndlr_handle")
-        return "container" if h in _CONTAINERS else _handler(h)
+        return norm(r.get("title")), ("container" if h in _CONTAINERS else _handler(h))
 
-    def avail(rows):
+    def avail(rows, titles=None):
         out = {}
         for r in rows:
             # Renamed types compare elsewhere; dropped types (course and tool links) are reported as a
             # known loss by "Content types carried over", so they aren't "not found" here too.
-            if r.get("cnthndlr_handle") in _RENAMED_BY_CONVERSION | _DROPPED_BY_CONVERSION:
+            if r.get("cnthndlr_handle") in _NOT_MATCHED_BY_TITLE:
                 continue
-            key = (norm(r.get("title")), kind(r))
-            y, n_ = out.get(key, (0, 0))
-            out[key] = (y + (r.get("available_ind") != "N"), n_ + (r.get("available_ind") == "N"))
+            k = key(r)
+            y, n_ = out.get(k, (0, 0))
+            out[k] = (y + (r.get("available_ind") != "N"), n_ + (r.get("available_ind") == "N"))
+            if titles is not None:
+                titles[k] = plain(r.get("title"))
         return out
 
-    otree = p.orig("S3b")
-    oa, na = avail(otree), avail(p.copy("S3b"))
-    titles = {(norm(r.get("title")), kind(r)): html.unescape(re.sub(r"<[^>]*>", "", r.get("title") or ""))
-              for r in otree}
-    # Containers with nothing in them, by key (only when the scan has parent IDs).
-    parents = {r.get("parent_pk") for r in otree} if otree and "parent_pk" in otree[0] else None
-    empty = {(norm(r.get("title")), "container") for r in otree
-             if parents is not None and kind(r) == "container" and r.get("content_pk") not in parents}
+    otree, titles = p.orig("S3b"), {}
+    oa, na = avail(otree, titles), avail(p.copy("S3b"))
+    # Containers with nothing in them (only when the scan has parent IDs).
+    kids = _children(otree)
+    empty = set() if kids is None else {key(r) for r in otree
+                                        if r.get("cnthndlr_handle") in _CONTAINERS and r.get("content_pk") not in kids}
     shown, hidden, missing, empty_missing = [], [], [], []
     for key, (oy, on) in oa.items():
         if key not in na:
@@ -434,30 +489,56 @@ def check_availability(p: Pair):
 
 def check_grade_columns(p: Pair):
     """Grade column count (S4). Ultra drops the weighted total, and the default total when the course
-    has nothing to total."""
+    has nothing to total. Which columns are actually gone comes from the column map (M2), so a lost
+    column is never explained away by a Total that was kept."""
     if not p.both("S4"):
         return
-    ov, nv = len(p.orig("S4")), len(p.copy("S4"))
-    weighted = sum(1 for r in p.orig("S4") if _WEIGHTED.search(r.get("title") or ""))
-    totals = sum(1 for r in p.orig("S4") if _DEFAULT_TOTAL.search(r.get("title") or ""))
+    orows = p.orig("S4")
+    ov, nv = len(orows), len(p.copy("S4"))
+    # The columns that are gone: from the column map when the run has it, else every Original column
+    # (the old estimate from titles).
+    gone = ([m for m in column_map(p.post, p.o).values() if m.get("match_status") == "not found"]
+            if "M2" in p.ran_post else orows)
+    reasons = Counter(_removed_reason(m.get("title"), _nothing_graded(orows)) for m in gone)
+    weighted, totals = reasons["weighted total"], reasons["default total"]
+    kept = ov - weighted - totals            # what the copy should have before anything it adds
+    if totals:
+        dropped = "Ultra drops the weighted total, and the default total column when nothing in the course is graded."
+    elif weighted:
+        dropped = "Ultra drops the weighted total column."
+    else:
+        dropped = ""
     if ov == nv:
         p.add("Grades", "Grade columns", ov, nv, SAME)
-    elif nv == ov - weighted:
-        p.add("Grades", "Grade columns", ov, nv, EXPECTED, "Ultra drops the weighted total column.")
-    elif nv == ov - weighted - totals:
-        p.add("Grades", "Grade columns", ov, nv, EXPECTED,
-              "Ultra drops the weighted total, and the default total column when nothing in the course is graded.")
-    elif nv > ov:
-        undeployed = {t.get("content_pk") for t in undeployed_tests_folder(p)} if p.both("S3b") else set()
-        k = sum(1 for r in p.copy("S4") if r.get("content_pk") in undeployed and r.get("content_pk") is not None)
-        if k:
-            p.add("Grades", "Grade columns", ov, nv, EXPECTED_FIX,
-                  f"{k} column(s) belong to the undeployed tests conversion put in a hidden folder (hidden from "
-                  "learners); they go if that folder is removed. Extra columns are listed in the ID map.")
+    elif nv == kept:
+        p.add("Grades", "Grade columns", ov, nv, EXPECTED, dropped)
+    elif nv > kept:
+        extra = nv - kept
+        undeployed = {t.get("content_pk") for t in undeployed_tests_folder(p)}
+        k = sum(1 for r in p.copy("S4") if r.get("content_pk") in undeployed)
+        note = (f"{k} column(s) belong to the undeployed tests conversion put in a hidden folder (hidden from "
+                "learners); they go if that folder is removed. " if k else "")
+        if k == extra:
+            p.add("Grades", "Grade columns", ov, nv, EXPECTED_FIX, (dropped + " " + note).strip())
         else:
-            p.add("Grades", "Grade columns", ov, nv, EXPECTED, "Extra columns in Ultra are listed in the ID map.")
+            p.add("Grades", "Grade columns", ov, nv, EXPECTED,
+                  (dropped + " " + note + f"{extra - k} other column(s) are new in Ultra: see the ID map.").strip())
     else:
         p.add("Grades", "Grade columns", ov, nv, DIFFERENT, "Missing columns are listed in the ID map as not found.")
+
+
+def _nothing_graded(rows) -> bool:
+    """True when the course has no column of its own to total: every column is calculated."""
+    return not any((r.get("calculated_ind") or "N") == "N" for r in rows)
+
+
+def _removed_reason(title, nothing_graded: bool) -> str | None:
+    """Why Ultra has no counterpart for an Original column, if it's one Ultra always drops."""
+    if _WEIGHTED.search(title or ""):
+        return "weighted total"
+    if nothing_graded and _DEFAULT_TOTAL.search(title or ""):
+        return "default total"
+    return None
 
 
 def check_groups(p: Pair):
@@ -498,15 +579,24 @@ def check_release_conditions(p: Pair):
 
     o_sigs = {_crit_sig(r): r for r in orows}
     n_sigs = {_crit_sig(r) for r in nrows}
-    n_no_groups = {_without_groups(s) for s in n_sigs}
-    lost = [r for s, r in o_sigs.items() if s not in n_sigs]
-    group_only = [r for r in lost if r.get("groups_named") and _without_groups(_crit_sig(r)) in n_no_groups]
-    # Copied without students: a condition naming learners comes over naming none of them, because
-    # those learners aren't in the copy. Not a conversion loss; the copy with learners shows it.
-    n_no_users = {_without_users(s) for s in n_sigs}
-    users_only = [r for r in lost if r not in group_only and not p.students_copied and r.get("users_named")
-                  and _without_users(_crit_sig(r)) in n_no_users]
-    other = [r for r in lost if r not in group_only and r not in users_only]
+    lost = [(s, r) for s, r in o_sigs.items() if s not in n_sigs]
+    # Each lost condition goes in one bucket, by what it lost. Conversion drops groups (the group repair
+    # restores them). Copied without students, the named learners aren't in the copy either: not a
+    # conversion loss, and the copy with learners shows it.
+    tries = [(dict(groups=True), "group_only")]
+    if not p.students_copied:
+        tries += [(dict(users=True), "users_only"), (dict(groups=True, users=True), "group_only")]
+    stripped = {i: {_sig_without(s, **kw) for s in n_sigs} for i, (kw, _) in enumerate(tries)}
+    buckets = {"group_only": [], "users_only": [], "other": []}
+    for s, r in lost:
+        for i, (kw, bucket) in enumerate(tries):
+            needed = (not kw.get("groups") or r.get("groups_named")) and (not kw.get("users") or r.get("users_named"))
+            if needed and _sig_without(s, **kw) in stripped[i]:
+                buckets[bucket].append(r)
+                break
+        else:
+            buckets["other"].append(r)
+    group_only, users_only, other = buckets["group_only"], buckets["users_only"], buckets["other"]
     if not lost:
         p.add("Release conditions", "Conditions carried over exactly", len(o_sigs), len(o_sigs), SAME,
               "Same item, type, score range, dates, gate column, groups and named learners.")
@@ -633,11 +723,7 @@ def check_learner_records(p: Pair):
         p.add("Learner records", "Grade and attempt records", "", "", NOT_CHECKED,
               "The learner-level data or the column map is missing from one of the scans (run without --no-learner).")
         return
-    if not p.students_copied and p.orig("S7") and not p.copy("S7"):
-        n = len(p.orig("S7"))
-        p.add("Learner records", "Grade and attempt records matching", n, 0, EXPECTED,
-              f"Copied without students: the {n} record(s) stay in the Original, and are compared when the "
-              "course is copied with its learners.")
+    if _left_in_original(p, "S7", "Learner records", "Grade and attempt records matching", "record(s)"):
         return
     cmap = column_map(p.post, p.o)
     new_rows = {(r["users_pk1"], r["col_pk"]): r for r in p.copy("S7")}
@@ -683,6 +769,18 @@ def check_learner_records(p: Pair):
           " ".join(note))
 
 
+def _left_in_original(p: Pair, label: str, area: str, check: str, what: str) -> bool:
+    """Copied without students: the learners' records stay in the Original. Adds the Expected row and
+    returns True when that's the case for this query."""
+    rows = p.orig(label)
+    if p.students_copied or not rows or p.copy(label):
+        return False
+    p.add(area, check, len(rows), 0, EXPECTED,
+          f"Copied without students: the {len(rows)} {what} stay in the Original, and are compared when the "
+          "course is copied with its learners.")
+    return True
+
+
 def _scorm_state(r):
     """The resume-state fingerprint: from the engine's tables if written out, else from its runtime record."""
     if r is None:
@@ -699,11 +797,7 @@ def check_scorm(p: Pair):
               "The learner-level SCORM data is missing from one of the scans (run without --no-learner).")
         return
 
-    if not p.students_copied and p.orig("S10") and not p.copy("S10"):
-        n = len(p.orig("S10"))
-        p.add("SCORM", "SCORM records with the same resume state", n, 0, EXPECTED,
-              f"Copied without students: the {n} SCORM record(s) stay in the Original, and are compared when "
-              "the course is copied with its learners.")
+    if _left_in_original(p, "S10", "SCORM", "SCORM records with the same resume state", "SCORM record(s)"):
         return
 
     def key(r):
@@ -790,13 +884,24 @@ def check_hidden_columns(p: Pair):
     if not (p.both("S4") and "M2" in p.ran_post):
         return
     copy_cols = {r["col_pk"]: r for r in p.copy("S4")}
-    # The attached item's availability: from S4 when the scan has it, else from the copy's tree.
-    tree_avail = {r.get("content_pk"): r.get("available_ind") for r in p.copy("S3b")}
+    # Whether a learner can reach the attached item: the item and every folder above it available.
+    # From S4 when the scan has it (item_reachable), else by walking the copy's tree (S3b).
+    tree = {r.get("content_pk"): r for r in p.copy("S3b")}
+
+    def walk(pk):
+        seen = set()
+        while pk not in (None, "") and pk in tree and pk not in seen:
+            seen.add(pk)
+            node = tree[pk]
+            if node.get("available_ind") == "N":
+                return "N"
+            pk = node.get("parent_pk")
+        return "Y" if seen else None
 
     def item_available(col):
         if col.get("content_pk") in (None, ""):
             return None
-        return col.get("item_available") or tree_avail.get(col.get("content_pk"))
+        return col.get("item_reachable") or walk(col.get("content_pk")) or col.get("item_available")
 
     shown, follows_item = [], []
     for m in column_map(p.post, p.o).values():
@@ -844,9 +949,13 @@ def id_map(o: str, n: str, base: dict, post: dict) -> list[dict]:
     row's IDs are gradebook_main.pk1, with the attached item's course_contents.pk1 beside them."""
     o_s1, n_s1 = _one(base, "S1", o), _one(post, "S1", n)
     o_pk, n_pk = o_s1.get("crs_pk"), n_s1.get("crs_pk")
+    o_cols, n_cols = _rows(base, "S4", o), _rows(post, "S4", n)
     # Grade column pk -> its attached item's content pk, on each side (S4).
-    o_item = {str(r["col_pk"]): r.get("content_pk") for r in _rows(base, "S4", o)}
-    n_item = {str(r["col_pk"]): r.get("content_pk") for r in _rows(post, "S4", n)}
+    o_item = {str(r["col_pk"]): r.get("content_pk") for r in o_cols}
+    n_item = {str(r["col_pk"]): r.get("content_pk") for r in n_cols}
+    nothing_graded = _nothing_graded(o_cols)
+    removed = {"weighted total": "removed in Ultra (weighted total)",
+               "default total": "removed in Ultra (default total, nothing graded)"}
 
     def item(side, col_pk):
         v = side.get(str(col_pk)) if col_pk not in (None, "") else None
@@ -857,9 +966,6 @@ def id_map(o: str, n: str, base: dict, post: dict) -> list[dict]:
         r.update(orig_course_id=o, new_course_id=n, **kw)
         return r
 
-    def plain(title):
-        return re.sub(r"<[^>]*>", "", title or "")
-
     rows = [row(kind="course", table="course_main", orig_pk1=o_pk or "", new_pk1=n_pk or "",
                 title=o_s1.get("course_name", ""),
                 orig_batch_uid=o_s1.get("batch_uid") or "", new_batch_uid=n_s1.get("batch_uid") or "",
@@ -868,16 +974,14 @@ def id_map(o: str, n: str, base: dict, post: dict) -> list[dict]:
     for m in sorted(column_map(post, o).values(), key=lambda r: r["orig_col_pk"]):
         mapped.add(m.get("new_col_pk"))
         status = m.get("match_status", "")
-        if status == "not found" and _WEIGHTED.search(m.get("title") or ""):
-            status = "removed in Ultra (weighted total)"
-        elif status == "not found" and _DEFAULT_TOTAL.search(m.get("title") or ""):
-            status = "removed in Ultra (default total, nothing graded)"
+        if status == "not found":
+            status = removed.get(_removed_reason(m.get("title"), nothing_graded), status)
         rows.append(row(kind="grade column", table="gradebook_main",
                         orig_pk1=m["orig_col_pk"], new_pk1=m.get("new_col_pk") or "", title=m.get("title", ""),
                         orig_course_contents_pk1=item(o_item, m["orig_col_pk"]),
                         new_course_contents_pk1=item(n_item, m.get("new_col_pk")),
                         attached_item=plain(m.get("content_title")), match_status=status))
-    for r in _rows(post, "S4", n):
+    for r in n_cols:
         if r["col_pk"] not in mapped:
             rows.append(row(kind="grade column", table="gradebook_main", new_pk1=r["col_pk"],
                             title=r.get("title", ""), new_course_contents_pk1=item(n_item, r["col_pk"]),

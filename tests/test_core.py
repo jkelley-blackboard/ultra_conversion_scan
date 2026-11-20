@@ -156,11 +156,42 @@ def _status(p, check):
 
 def test_grade_columns_default_totals_dropped_when_nothing_graded():
     from convscan.compare import EXPECTED, check_grade_columns
-    base = {"S4": [{"course_id": "C1", "title": "OutcomeDefinition.Total.title"},
-                   {"course_id": "C1", "title": "OutcomeDefinition.WeightedTotal.title"}]}
+    base = {"S4": [{"course_id": "C1", "title": "OutcomeDefinition.Total.title", "calculated_ind": "T"},
+                   {"course_id": "C1", "title": "OutcomeDefinition.WeightedTotal.title", "calculated_ind": "W"}]}
     p = _pair(base, {"S4": []})
     check_grade_columns(p)
     assert _status(p, "Grade columns")["status"] == EXPECTED
+
+
+def test_a_lost_column_is_not_explained_by_a_kept_total():
+    """The Total stays when the course has graded columns, so one fewer column in the copy is a loss."""
+    from convscan.compare import DIFFERENT, EXPECTED, EXPECTED_FIX, check_grade_columns
+    col = lambda c, pk, title, calc="N": {"course_id": c, "col_pk": pk, "title": title, "calculated_ind": calc}
+    m2 = lambda pk, title, new, status: {"orig_course_id": "C1", "orig_col_pk": pk, "title": title,
+                                         "new_col_pk": new, "match_status": status}
+    base = {"S4": [col("C1", 1, "Quiz 1"), col("C1", 2, "Quiz 2"), col("C1", 3, "Total", "T")]}
+    post = {"S4": [col("U-C1", 11, "Quiz 1"), col("U-C1", 13, "Total", "C")],
+            "M2": [m2(1, "Quiz 1", 11, "matched"), m2(2, "Quiz 2", "", "not found"), m2(3, "Total", 13, "matched")]}
+    p = _pair(base, post)
+    check_grade_columns(p)
+    assert _status(p, "Grade columns")["status"] == DIFFERENT
+    # More columns than the undeployed tests explain: Expected, not "should fix".
+    post = {"S4": [col("U-C1", 11, "Quiz 1"), col("U-C1", 12, "Quiz 2"), col("U-C1", 13, "Total", "C"),
+                   dict(col("U-C1", 14, "Draft"), content_pk=21), col("U-C1", 15, "Manual")],
+            "S3b": [{"course_id": "U-C1", "content_pk": 20, "parent_pk": 10, "title": "Undeployed Tests", "depth": 1,
+                     "cnthndlr_handle": "resource/x-bb-folder", "available_ind": "N"},
+                    {"course_id": "U-C1", "content_pk": 21, "parent_pk": 20, "title": "Draft", "depth": 2,
+                     "cnthndlr_handle": "resource/x-bb-asmt-test-link", "available_ind": "N"}],
+            "M2": [m2(1, "Quiz 1", 11, "matched"), m2(2, "Quiz 2", 12, "matched"), m2(3, "Total", 13, "matched")]}
+    base["S3b"] = []
+    p = _pair(base, post)
+    check_grade_columns(p)
+    got = _status(p, "Grade columns")
+    assert got["status"] == EXPECTED and "1 other column(s)" in got["note"]
+    post["S4"] = post["S4"][:4]                                   # only the undeployed test's column extra
+    p = _pair(base, post)
+    check_grade_columns(p)
+    assert _status(p, "Grade columns")["status"] == EXPECTED_FIX
 
 
 def test_members_copied_without_students():
@@ -315,6 +346,22 @@ def test_items_match_across_content_area_conversion_and_entities():
     assert "Old Area" in checks["Empty folders not carried over"]["note"]
 
 
+def test_titles_keep_guillemet_text_and_decode_entities():
+    from convscan.compare import norm
+    assert norm("Opérations « boîte »") == norm("Opérations < boîte >") == "opérations < boîte >"
+    assert norm("Quiz «Part 1»") != norm("Quiz «Part 2»")
+    assert norm("<u>Exam Q&amp;A</u>") == norm("Exam Q&A") == "exam q&a"
+
+
+def test_conditions_losing_groups_and_learners_without_students():
+    from convscan.compare import ACTION, check_release_conditions
+    crit = lambda c, groups, users: {"course_id": c, "item_title": "Unit 2", "crit_type": "ACL", "negate_ind": "N",
+                                     "groups_named": groups, "users_named": users}
+    p = _pair({"S9": [crit("C1", "Cohort A", "123")]}, {"S9": [crit("U-C1", "", "")]}, students_copied=False)
+    check_release_conditions(p)
+    assert _status(p, "Conditions carried over exactly")["status"] == ACTION   # the group repair
+
+
 def test_named_learner_conditions_in_a_copy_without_students():
     from convscan.compare import DIFFERENT, EXPECTED, check_release_conditions
     crit = lambda c, users: {"course_id": c, "item_title": "All Questions", "crit_type": "ACL", "negate_ind": "N",
@@ -361,12 +408,18 @@ def test_hidden_items_and_wrapped_items():
 def test_hidden_column_rules_split_by_item():
     from convscan.config import PACKAGE
     doc = rules.load_rules(PACKAGE / "rules" / "default.yaml")
-    s4 = [{"course_id": "C1", "title": "Quiz 1", "visible_ind": "N", "content_pk": 5, "item_available": "Y"},
-          {"course_id": "C1", "title": "Total", "visible_ind": "N", "content_pk": "", "item_available": ""},
-          {"course_id": "C1", "title": "Staff test", "visible_ind": "N", "content_pk": 6, "item_available": "N"}]
+    col = lambda title, pk, avail, reach: {"course_id": "C1", "title": title, "visible_ind": "N", "content_pk": pk,
+                                           "item_available": avail, "item_reachable": reach}
+    s4 = [col("Quiz 1", 5, "Y", "Y"), col("Total", "", "", ""), col("Staff test", 6, "N", "N"),
+          col("In a hidden folder", 7, "Y", "N")]          # the item is available, its folder isn't
     got = {f["id"]: f for f in rules.evaluate(doc, {"S4": s4}, "C1", {"S4"}, {})[0]}
     assert got["hidden_columns_shown"]["n"] == 1 and "Quiz 1" in got["hidden_columns_shown"]["says"]
     assert got["hidden_columns_no_item"]["n"] == 1 and "Total" in got["hidden_columns_no_item"]["says"]
+    # Rows saved by an earlier version, without item_reachable: not checked, and it says why.
+    old = [{k: v for k, v in r.items() if k != "item_reachable"} for r in s4]
+    findings, not_checked = rules.evaluate(doc, {"S4": old}, "C1", {"S4"}, {})
+    assert "hidden_columns_shown" not in {f["id"] for f in findings}
+    assert any(n["id"] == "hidden_columns_shown" and "earlier version" in n["reason"] for n in not_checked)
 
 
 def test_hidden_column_follows_its_item_in_the_copy():

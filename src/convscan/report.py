@@ -9,14 +9,7 @@ import pathlib
 import jinja2
 
 from . import __version__, compare, rules
-
-
-def _one(data, label, cid):
-    return next((r for r in data.get(label, []) if r.get("course_id") == cid), {})
-
-
-def _rows(data, label, cid):
-    return [r for r in data.get(label, []) if r.get("course_id") == cid]
+from .compare import _one, _rows   # one course's rows, from the batch's rows indexed once by course
 
 
 def course_facts(data: dict, cid: str) -> dict:
@@ -82,7 +75,11 @@ def site_settings(data: dict) -> list[dict]:
 
 
 def _env(templates: pathlib.Path) -> jinja2.Environment:
-    env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(templates)), trim_blocks=True,
+    # A custom templates folder wins; anything it lacks (for example a template added in a later
+    # version, such as report_key.md.j2) comes from the packaged templates.
+    packaged = pathlib.Path(__file__).parent / "templates"
+    loader = jinja2.ChoiceLoader([jinja2.FileSystemLoader(str(templates)), jinja2.FileSystemLoader(str(packaged))])
+    env = jinja2.Environment(loader=loader, trim_blocks=True,
                              lstrip_blocks=True, keep_trailing_newline=True, undefined=jinja2.StrictUndefined)
     env.filters["n"] = lambda v: "" if v is None else (f"{v:,}" if isinstance(v, int) else v)
     env.filters["stamp"] = stamp

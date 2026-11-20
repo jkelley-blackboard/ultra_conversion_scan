@@ -2,7 +2,7 @@
 
 **Prepared for:** Sample University | **Post-scan:** 2026-12-01 10:00 (UTC-05:00) | **Baseline:** 2026-11-30 08:00 (UTC-05:00) | **Batch:** sample_post
 
-> Generated from the LMS reporting database by convscan 0.4.1, by comparing the Ultra copy with the Original as scanned before conversion. Where each value comes from (`table.field`): [REPORT_KEY.md](REPORT_KEY.md).
+> Generated from the LMS reporting database by convscan 0.5.0, by comparing the Ultra copy with the Original as scanned before conversion. Where each value comes from (`table.field`): [REPORT_KEY.md](REPORT_KEY.md).
 
 ## Summary
 
@@ -48,7 +48,7 @@
 
 ## ID map
 
-Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`, with the same columns. IDs are the numeric primary keys as stored in the database: `pk1` is `course_main.pk1` on the course row and `gradebook_main.pk1` on a grade column row; `course_contents_pk1` is `gradebook_main.course_contents_pk1`, the item the column belongs to.
+Every grade column in the Original, matched to the Ultra copy by its attached item. The full map for the batch is in `idmap.csv`, under the same column names, plus the course IDs and external IDs. IDs are the numeric primary keys as stored in the database: `pk1` is `course_main.pk1` on the course row and `gradebook_main.pk1` on a grade column row; `course_contents_pk1` is `gradebook_main.course_contents_pk1`, the item the column belongs to.
 
 | `table` | `orig_pk1` | `new_pk1` | `title` | `attached_item` | `orig_course_contents_pk1` | `new_course_contents_pk1` | `match_status` |
 |---|---|---|---|---|---|---|---|

@@ -270,7 +270,7 @@ deep as (
 select d.course_id, d.pk1 as content_pk, d.cnthndlr_handle, d.title, d.path,
   d.depth + 1 as ultra_level, d.max_level,
   coalesce(b.items_here, 0) as items_here,
-  case when d.depth + 1 >= d.max_level + 1 then 1 else 0 end as moves_one_level_more,
+  case when d.depth >= d.max_level then 1 else 0 end as moves_one_level_more,   -- still too deep with one more level
   d.path || ' (' || coalesce(b.items_here, 0) || ' item(s))' as label
 from deep d
 left join lateral (
@@ -303,8 +303,8 @@ tree as (
   union all
   select t.course_id, c.pk1, c.cnthndlr_handle, c.main_data, t.path || ' / ' || c.title
   from tree t join course_contents c on c.parent_pk1 = t.pk1),
-d as (
-  select t.course_id, t.pk1 as content_pk, regexp_replace(t.path, '<[^>]*>', '', 'g') as path,
+all_folders as (                             -- every folder and learning module below the top level
+  select t.course_id, t.pk1 as content_pk, regexp_replace(t.path, '<[A-Za-z/!][^>]*>', '', 'g') as path,
     length(trim(regexp_replace(coalesce(t.main_data, ''), '<[^>]*>|&nbsp;', ' ', 'g'))) as text_length,
     coalesce(t.main_data ~* '<(b|strong|i|em|u|ul|ol|table|h[1-6])[\s>]|style="', false) as has_formatting,
     coalesce(t.main_data ~* '<a\s', false) as has_links,
@@ -312,10 +312,9 @@ d as (
     (select count(*) from course_contents_files f where f.course_contents_pk1 = t.pk1) as files
   from tree t
   where t.cnthndlr_handle in ('resource/x-bb-folder', 'resource/x-bb-lesson')
-    and t.path like '% / %'
-    and (length(trim(regexp_replace(coalesce(t.main_data, ''), '<[^>]*>|&nbsp;', '', 'g'))) > 0
-         or coalesce(t.main_data ~* '<(img|iframe|video|embed|object)[\s>]', false)
-         or exists (select 1 from course_contents_files f where f.course_contents_pk1 = t.pk1)))
+    and t.path like '% / %'),
+d as (                                       -- the ones with a description: text, media or a file
+  select * from all_folders a where a.text_length > 0 or a.has_media or a.files > 0)
 select d.*, st.becomes_document,
   -- Lost with the setting off: anything beyond 750 characters of plain text.
   (not st.becomes_document and (d.has_links or d.has_media or d.files > 0 or d.text_length > 750)) as loses_content,
@@ -334,19 +333,33 @@ order by d.course_id, d.path;
 -- S4. Gradebook columns: type, attached item, visibility, calculated, orphans
 --     (columns tracked by an outside system are joined afterwards from its own list).
 --     Deleted columns are excluded. item_available is the attached item's availability (null
---     when the column has no item): in Ultra a column attached to an item shows to learners
---     whenever the item does, whatever the column's own visibility says.
+--     when the column has no item), and item_reachable adds the folders above it: in Ultra a
+--     column attached to an item shows to learners whenever the item does, whatever the
+--     column's own visibility says.
 -- ===========================================================================
-with scope as ({SCOPE}),
+with recursive scope as ({SCOPE}),
 grades as (
   select gg.gradebook_main_pk1 as col_pk, count(*) as grade_rows
   from scope s
   join gradebook_main gm  on gm.crsmain_pk1 = s.crs_pk and coalesce(gm.deleted_ind, 'N') = 'N'
   join gradebook_grade gg on gg.gradebook_main_pk1 = gm.pk1
-  group by gg.gradebook_main_pk1)
+  group by gg.gradebook_main_pk1),
+reach as (                                   -- one walk down each course's content tree
+  select cc.pk1, cc.available_ind <> 'N' as reachable
+  from scope s
+  join course_contents cc on cc.crsmain_pk1 = s.crs_pk
+  where cc.parent_pk1 is null
+  union all
+  select c.pk1, r.reachable and c.available_ind <> 'N'
+  from reach r join course_contents c on c.parent_pk1 = r.pk1)
 select s.course_id, gm.pk1 as col_pk, gm.title, gm.display_title, gm.score_provider_handle,
   gm.course_contents_pk1 as content_pk, cc.title as content_title, p.title as content_parent_title,
   cc.available_ind as item_available,
+  -- item_reachable: the item and every folder or learning module above it are available, so a
+  -- learner can reach it (null when the column has no item). Release conditions aren't counted.
+  case when cc.pk1 is null then null
+       when rc.pk1 is null then cc.available_ind     -- not under the course's top level (shouldn't happen)
+       when rc.reachable then 'Y' else 'N' end as item_reachable,
   gm.calculated_ind, gm.scorable_ind, gm.possible, gm.aggregation_model,
   gm.visible_ind, gm.visible_in_book_ind,           -- 'N' = hidden from students today
   gm.single_attempt_ind, gm.multiple_attempts,
@@ -359,6 +372,7 @@ from scope s
 join gradebook_main gm on gm.crsmain_pk1 = s.crs_pk and coalesce(gm.deleted_ind, 'N') = 'N'
 left join course_contents cc on cc.pk1 = gm.course_contents_pk1
 left join course_contents p  on p.pk1 = cc.parent_pk1
+left join reach rc           on rc.pk1 = cc.pk1
 left join grades g           on g.col_pk = gm.pk1
 order by s.course_id, gm.position, gm.pk1;
 
@@ -954,40 +968,49 @@ order by r.registry_key;
 --       * titles: conversion strips HTML from item titles ('<u>Chapter 1</u>' becomes
 --         'Chapter 1') and plain-texts typography (en and em dashes to hyphens, curly
 --         quotes to straight, French guillemets to angle brackets, seen in production
---         2026-11-19), so tags, typography, case and repeated spaces are ignored,
+--         2026-11-19), so tags, entities, typography, case and repeated spaces are ignored,
+--         by the same steps as norm() in compare.py,
 --       * type: an Original assignment (resource/x-bb-assignment) becomes an Ultra
 --         assessment (resource/x-bb-assessment), so the two count as the same type,
 --       * calculated: Original's T, W, M and so on all become C in Ultra, so only
 --         calculated or not is compared. Ultra drops the Weighted Total column.
 -- ===========================================================================
 with pairs as ({PAIRS}),                                -- orig_course_id, new_course_id
-o as (
-  select p.orig_course_id, p.new_course_id, gm.pk1 as col_pk, gm.title, gm.score_provider_handle,
-         gm.calculated_ind, gm.visible_ind, gm.visible_in_book_ind, cc.title as content_title, cc.cnthndlr_handle,
-         par.title as parent_title,
-         lower(trim(regexp_replace(regexp_replace(translate(cc.title, '–—‘’“”«»', '--''''""<>'), '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as c_norm,
-         lower(trim(regexp_replace(regexp_replace(translate(par.title, '–—‘’“”«»', '--''''""<>'), '<[^>]*>', '', 'g'), '\s+', ' ', 'g'))) as p_norm,
-         lower(trim(regexp_replace(regexp_replace(translate(gm.title, '–—‘’“”«»', '--''''""<>'), '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as t_norm,
-         replace(coalesce(gm.score_provider_handle, ''), 'resource/x-bb-assignment', 'resource/x-bb-assessment') as h_norm,
-         coalesce(gm.calculated_ind, 'N') <> 'N' as is_calc
+cols as (                                    -- every column on both sides: 'o' the Original, 'n' the copy
+  select 'o' as side, p.orig_course_id, p.new_course_id, gm.pk1 as col_pk, gm.title, gm.score_provider_handle,
+         gm.calculated_ind, gm.visible_ind, gm.visible_in_book_ind, gm.course_contents_pk1
   from pairs p
   join course_main cm on cm.course_id = p.orig_course_id
   join gradebook_main gm on gm.crsmain_pk1 = cm.pk1 and coalesce(gm.deleted_ind, 'N') = 'N'
-  left join course_contents cc  on cc.pk1 = gm.course_contents_pk1
-  left join course_contents par on par.pk1 = cc.parent_pk1),
-n as (
-  select p.new_course_id, gm.pk1 as col_pk, gm.title, gm.score_provider_handle, gm.calculated_ind,
-         gm.visible_ind, gm.visible_in_book_ind, cc.title as content_title, cc.cnthndlr_handle, par.title as parent_title,
-         lower(trim(regexp_replace(regexp_replace(translate(cc.title, '–—‘’“”«»', '--''''""<>'), '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as c_norm,
-         lower(trim(regexp_replace(regexp_replace(translate(par.title, '–—‘’“”«»', '--''''""<>'), '<[^>]*>', '', 'g'), '\s+', ' ', 'g'))) as p_norm,
-         lower(trim(regexp_replace(regexp_replace(translate(gm.title, '–—‘’“”«»', '--''''""<>'), '<[^>]*>', '', 'g'), '\s+', ' ', 'g')))  as t_norm,
-         replace(coalesce(gm.score_provider_handle, ''), 'resource/x-bb-assignment', 'resource/x-bb-assessment') as h_norm,
-         coalesce(gm.calculated_ind, 'N') <> 'N' as is_calc
+  union all
+  select 'n', p.orig_course_id, p.new_course_id, gm.pk1, gm.title, gm.score_provider_handle,
+         gm.calculated_ind, gm.visible_ind, gm.visible_in_book_ind, gm.course_contents_pk1
   from pairs p
   join course_main cm on cm.course_id = p.new_course_id
-  join gradebook_main gm on gm.crsmain_pk1 = cm.pk1 and coalesce(gm.deleted_ind, 'N') = 'N'
-  left join course_contents cc  on cc.pk1 = gm.course_contents_pk1
-  left join course_contents par on par.pk1 = cc.parent_pk1),
+  join gradebook_main gm on gm.crsmain_pk1 = cm.pk1 and coalesce(gm.deleted_ind, 'N') = 'N'),
+normed as (
+  select c.*, cc.title as content_title, cc.cnthndlr_handle, par.title as parent_title,
+         nm.c_norm, nm.p_norm, nm.t_norm,
+         replace(coalesce(c.score_provider_handle, ''), 'resource/x-bb-assignment', 'resource/x-bb-assessment') as h_norm,
+         coalesce(c.calculated_ind, 'N') <> 'N' as is_calc
+  from cols c
+  left join course_contents cc  on cc.pk1 = c.course_contents_pk1
+  left join course_contents par on par.pk1 = cc.parent_pk1
+  cross join lateral (
+    -- Title normalization, written once for both sides, the same steps in the same order as norm()
+    -- in compare.py: real tags out (a tag starts with a letter, / or !, so the < > conversion makes
+    -- of guillemets survive), common entities decoded (&amp; last), typography plain-texted, spaces
+    -- collapsed, lower case.
+    select max(y.v) filter (where x.k = 'c') as c_norm, max(y.v) filter (where x.k = 'p') as p_norm,
+           max(y.v) filter (where x.k = 't') as t_norm
+    from (values ('c', cc.title), ('p', par.title), ('t', c.title)) as x(k, raw)
+    cross join lateral (select lower(trim(regexp_replace(translate(
+        replace(replace(replace(replace(replace(replace(
+          regexp_replace(x.raw, '<[A-Za-z/!][^>]*>', '', 'g'),
+          '&nbsp;', ' '), '&quot;', '"'), '&#39;', ''''), '&lt;', '<'), '&gt;', '>'), '&amp;', '&'),
+        '–—‘’“”«»' || chr(160), '--''''""<> '), '\s+', ' ', 'g'))) as v) y) nm),
+o as (select * from normed where side = 'o'),
+n as (select * from normed where side = 'n'),
 cand as (
   select o.*, n.col_pk as new_col_pk, n.visible_ind as new_visible_ind, n.visible_in_book_ind as new_in_book_ind,
     case

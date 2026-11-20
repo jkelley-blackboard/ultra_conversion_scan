@@ -24,7 +24,7 @@ repository tracks Test/Stage releases and records each delta on its
 If the next release isn't published yet, diff against the latest build on bbprepo for an interim list.
 After the release, run `convscan check` on the site.
 
-**Status (2026-11-20):** version 0.4.1. Tested on real copy-and-convert runs on a demo site, then run
+**Status (2026-11-20):** version 0.5.0. Tested on real copy-and-convert runs on a demo site, then run
 read-only on a production site: a batch of about 100 courses with tens of thousands of learners in
 progress, pre-scan and post-scan in under 15 minutes. What changed in each version is under
 [Versions](#versions).
@@ -235,14 +235,24 @@ listed in USER_GUIDE.md and in each report's "Not checked" section.
 
 ## Planned work
 
-**Before production:**
+**Before production:** done on one production site (2026-11-19 and 20): `check`, `pre` and `post`
+on about 100 courses, the replica lag read, the conversion settings read. Still to do with each new
+site: agree the new course ID format, and read its conversion settings (S14) before the first batch.
 
-- Run `check` and `pre` on a production site, starting with its largest course, and time them.
-- Confirm `check` can read the replica lag there. The DDA user may not be allowed to call
-  `pg_last_wal_receive_lsn()` and the related functions; if not, `post` runs with the lag shown as
-  unknown and the hand-off report says so.
-- Agree the new course ID format with the institution (the hyphen above), and read the site's
-  conversion settings with them (S14) before the first batch.
+**Refactors suggested by the 0.5.0 code review** (not done; each is sound but touches many checks):
+
+- One model of what conversion adds or drops (the undeployed-tests folder and its grade columns,
+  wrapper folders, dropped link types), worked out once per course from S5f, S14 and S3b, which every
+  count check then subtracts. Today several checks each allow for part of it, and "All items" accepts
+  any increase.
+- One projection of what a copy made without students should hold (members, learner rows, named
+  learners in conditions), applied once, instead of a "copied without students" branch in each check.
+- One table of content types (containers, renamed, dropped, the Ultra equivalent) shared by
+  compare.py, the rules and the SQL (through a placeholder like `{PAIRS}`).
+- One definition of title normalization: generate the M2 SQL expression from `norm()`'s steps, or
+  match columns in Python from S4.
+- Match undeployed tests to their questions by content ID rather than by title (S5d has no content
+  ID today).
 
 **Gaps found in the demo test:**
 
@@ -352,6 +362,29 @@ prints it, so a report can be traced to the code that made it. Each release is t
 | The reports and `idmap.csv` are stable enough for others to build on | 1.0.0 |
 
 Bump the version in the commit that makes the change, rebuild the sample reports, and add a line below.
+
+### 0.5.0 (2026-11-20)
+
+From a code review of everything since 0.3.0. Results change where noted.
+
+- **Grade column count:** a lost column is no longer explained away by a Total the copy kept. The
+  count now uses the column map, and "Expected, should fix" needs the undeployed tests to explain every
+  extra column. The ID map's "default total, nothing graded" label follows the same rule.
+- **Hidden grade columns that learners will see:** an item inside a hidden folder isn't counted as
+  visible. S4 has `item_reachable` (the item and every folder above it available); the rule and the
+  hand-off check use it.
+- **`batch_uid`** keeps leading zeros when a run is loaded again.
+- **Older runs:** a rule whose input lacks a column it needs (`requires:` in the rule file) shows as not
+  checked, with the reason, instead of silently finding nothing.
+- **Custom templates folder:** templates it lacks (such as the key) come from the packaged set.
+- **Release conditions** that lost both their groups and their named learners, in a copy made without
+  students, go to the group repair instead of Different.
+- **Title matching:** Python and the M2 SQL normalize titles by the same steps; text between French
+  guillemets is kept; entities are decoded in M2 too.
+- **Speed:** each batch's rows are indexed by course once, content trees by parent once, and the
+  undeployed-tests folder is worked out once per course. Re-rendering 4 runs (about 220 reports) takes
+  about 30 seconds, with identical output. M2 normalizes titles once for both sides, S4 walks each
+  content tree once, and S3e computes its description tests once.
 
 ### 0.4.1 (2026-11-20)
 

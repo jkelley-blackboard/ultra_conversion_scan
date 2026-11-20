@@ -178,7 +178,7 @@ def _coerce(v: str):
 
 # Text columns stay strings even when they look like numbers (course IDs like 0042, a title "2024").
 _TEXT = ("course_id", "title", "name", "path", "md5", "weights", "text", "handle", "named", "drawn_from",
-         "locations")
+         "locations", "batch_uid")   # batch_uid is an ID: '00123' must stay '00123'
 
 
 def load_run(path: pathlib.Path) -> tuple[dict, dict[str, list[dict]]]:

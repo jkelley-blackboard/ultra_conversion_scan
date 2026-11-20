@@ -101,6 +101,7 @@ def _side(copy: bool) -> dict[str, list[dict]]:
     gcol = lambda c, n, title, handle, content, vis="Y", calc="N": {
         "course_id": c, "col_pk": col(n), "title": title, "score_provider_handle": handle,
         "content_pk": pk * 100 + n if content else "", "content_title": content, "item_available": "Y" if content else "",
+        "item_reachable": "Y" if content else "",
         "calculated_ind": calc,
         "visible_ind": vis, "visible_in_book_ind": "Y", "orphan_candidate": "false", "grade_rows": 3}
     d["S4"] = [gcol(c1, 2, "Module 1 Quiz", "resource/x-bb-assessment", "Module 1 Quiz"),
