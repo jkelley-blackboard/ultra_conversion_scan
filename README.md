@@ -370,6 +370,8 @@ Bump the version in the commit that makes the change, rebuild the sample reports
   decoded and French guillemets handled (also in M2); empty folders, dropped links, undeployed tests and,
   in copies without students, named-learner conditions read Expected instead of Different. The French
   weighted total is recognized.
+- **Scan times:** reports show the scan and baseline time to the minute, with the UTC offset
+  (`2026-11-19 10:35 (UTC-05:00)`); `run.json` records the offset. Older runs show the time without it.
 
 ### 0.3.0 (2026-11-18)
 

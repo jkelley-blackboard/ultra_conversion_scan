@@ -220,7 +220,7 @@ def write_runs(folder) -> tuple[pathlib.Path, pathlib.Path]:
     pre, post = folder / "sample_pre", folder / "sample_post"
     common = {"scope": "manifest (2 courses)", "suffix": "-7777", "pairs": [list(p) for p in PAIRS],
               "learners": "active"}
-    _write(pre, _side(copy=False), {**common, "mode": "pre", "name": "sample_pre", "finished": "2026-11-30T08:00:00"})
+    _write(pre, _side(copy=False), {**common, "mode": "pre", "name": "sample_pre", "finished": "2026-11-30T08:00:00-05:00"})
     _write(post, _side(copy=True), {**common, "mode": "post", "name": "sample_post",
-                                    "finished": "2026-12-01T10:00:00", "baseline": str(pre.resolve())})
+                                    "finished": "2026-12-01T10:00:00-05:00", "baseline": str(pre.resolve())})
     return pre, post

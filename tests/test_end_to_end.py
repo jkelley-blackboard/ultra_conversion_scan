@@ -97,6 +97,15 @@ def test_id_map(tmp_path):
     assert "External ID (`course_main.batch_uid`) | DEMO101 → DEMO101-7777" in handoff
 
 
+def test_scan_times_show_hour_minute_and_offset(tmp_path):
+    assert report.stamp("2026-11-19T10:35:16-05:00") == "2026-11-19 10:35 (UTC-05:00)"
+    assert report.stamp("2026-11-19T15:35:16+00:00") == "2026-11-19 15:35 (UTC+00:00)"
+    assert report.stamp("2026-11-19T10:35:16") == "2026-11-19 10:35"          # older runs: no offset
+    _, post = _render(tmp_path)
+    head = (post / "DEMO101_handoff.md").read_text(encoding="utf-8")
+    assert "**Post-scan:** 2026-12-01 10:00 (UTC-05:00) | **Baseline:** 2026-11-30 08:00 (UTC-05:00)" in head
+
+
 def test_each_batch_has_a_report_key_for_its_reports(tmp_path):
     pre, post = _render(tmp_path)
     pre_key = (pre / "REPORT_KEY.md").read_text(encoding="utf-8")

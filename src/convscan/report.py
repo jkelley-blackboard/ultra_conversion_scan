@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import datetime as dt
 import json
 import pathlib
 
@@ -84,7 +85,24 @@ def _env(templates: pathlib.Path) -> jinja2.Environment:
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(templates)), trim_blocks=True,
                              lstrip_blocks=True, keep_trailing_newline=True, undefined=jinja2.StrictUndefined)
     env.filters["n"] = lambda v: "" if v is None else (f"{v:,}" if isinstance(v, int) else v)
+    env.filters["stamp"] = stamp
     return env
+
+
+def stamp(value) -> str:
+    """A run's finish time for the reports: date, hour and minute, with the UTC offset when the run
+    recorded one ('2026-11-19 10:35 (UTC-05:00)'). Older runs stored local time without an offset."""
+    text = str(value or "")
+    try:
+        t = dt.datetime.fromisoformat(text)
+    except ValueError:
+        return text[:16].replace("T", " ")
+    shown = t.strftime("%Y-%m-%d %H:%M")
+    if t.utcoffset() is not None:
+        minutes = int(t.utcoffset().total_seconds() // 60)
+        sign = "-" if minutes < 0 else "+"
+        shown += f" (UTC{sign}{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d})"
+    return shown
 
 
 def _course_ids(data: dict) -> list[str]:

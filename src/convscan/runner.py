@@ -153,7 +153,7 @@ def run_kit(runner: Runner, stmts: list[tuple[str, str]], out: pathlib.Path, met
             w.writerows([_cell(v) for v in r] for r in rows)
         results[label] = {"rows": len(rows), "seconds": round(time.time() - t0, 1)}
         print(f"  {label:<5} {len(rows):>8} rows  {results[label]['seconds']:>6.1f}s")
-    run = {**meta, "convscan": __version__, "finished": dt.datetime.now().isoformat(timespec="seconds"),
+    run = {**meta, "convscan": __version__, "finished": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
            "queries": results}
     (out / "run.json").write_text(json.dumps(run, indent=2), encoding="utf-8")
     return run

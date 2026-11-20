@@ -4,7 +4,7 @@
 {% set improvements = checks | selectattr("status", "equalto", "expected fix") | list %}
 # Conversion Hand-off Report: {{ c.course_id }}, {{ c.course_name }}
 
-**Prepared for:** {{ cfg.prepared_for }} | **Post-scan:** {{ run.finished[:10] }} | **Baseline:** {{ base_run.finished[:10] }} | **Batch:** {{ run.name }}
+**Prepared for:** {{ cfg.prepared_for }} | **Post-scan:** {{ run.finished | stamp }} | **Baseline:** {{ base_run.finished | stamp }} | **Batch:** {{ run.name }}
 
 > Generated from the LMS reporting database by convscan {{ version }}, by comparing the Ultra copy with the Original as scanned before conversion. Where each value comes from (`table.field`): [REPORT_KEY.md](REPORT_KEY.md).
 {% if run.replica_lag is defined %}
