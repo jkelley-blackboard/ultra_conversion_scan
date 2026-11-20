@@ -2,7 +2,7 @@
 
 **Prepared for:** Sample University | **Post-scan:** 2026-12-01 10:00 (UTC-05:00) | **Baseline:** 2026-11-30 08:00 (UTC-05:00) | **Batch:** sample_post
 
-> Generated from the LMS reporting database by convscan 0.4.0, by comparing the Ultra copy with the Original as scanned before conversion. Where each value comes from (`table.field`): [REPORT_KEY.md](REPORT_KEY.md).
+> Generated from the LMS reporting database by convscan 0.4.1, by comparing the Ultra copy with the Original as scanned before conversion. Where each value comes from (`table.field`): [REPORT_KEY.md](REPORT_KEY.md).
 
 ## Summary
 

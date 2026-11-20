@@ -24,7 +24,7 @@ repository tracks Test/Stage releases and records each delta on its
 If the next release isn't published yet, diff against the latest build on bbprepo for an interim list.
 After the release, run `convscan check` on the site.
 
-**Status (2026-11-20):** version 0.4.0. Tested on real copy-and-convert runs on a demo site, then run
+**Status (2026-11-20):** version 0.4.1. Tested on real copy-and-convert runs on a demo site, then run
 read-only on a production site: a batch of about 100 courses with tens of thousands of learners in
 progress, pre-scan and post-scan in under 15 minutes. What changed in each version is under
 [Versions](#versions).
@@ -352,6 +352,10 @@ prints it, so a report can be traced to the code that made it. Each release is t
 | The reports and `idmap.csv` are stable enough for others to build on | 1.0.0 |
 
 Bump the version in the commit that makes the change, rebuild the sample reports, and add a line below.
+
+### 0.4.1 (2026-11-20)
+
+The pre-conversion report's findings table is headed "What to watch" (was "What could go wrong").
 
 ### 0.4.0 (2026-11-20)
 

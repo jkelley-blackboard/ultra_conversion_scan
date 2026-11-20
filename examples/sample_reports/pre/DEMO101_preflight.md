@@ -2,7 +2,7 @@
 
 **Prepared for:** Sample University | **Scan:** 2026-11-30 08:00 (UTC-05:00) | **Batch:** sample_pre
 
-> Generated from the LMS reporting database by convscan 0.4.0. Figures are as of the scan. Severity: 1 blocks learners, 2 needs fixing, 3 improves the experience, 0 to check by hand. Where each value comes from (`table.field`): [REPORT_KEY.md](REPORT_KEY.md).
+> Generated from the LMS reporting database by convscan 0.4.1. Figures are as of the scan. Severity: 1 blocks learners, 2 needs fixing, 3 improves the experience, 0 to check by hand. Where each value comes from (`table.field`): [REPORT_KEY.md](REPORT_KEY.md).
 
 ## In short
 
@@ -32,7 +32,7 @@
 | Partial-credit questions | 1 |
 | Discussion posts | 6 |
 
-## What could go wrong
+## What to watch
 
 | Risk | Severity | Known? | What the scan found | Action |
 |---|---|---|---|---|

@@ -276,7 +276,7 @@ It reads top to bottom, from verdict to detail:
 1. **In short:** ready or not, the items that would block learners, and how many decisions are needed.
 2. **The course:** members, learners in progress, completed or expired, and disabled, content, gated
    items, grade columns, groups.
-3. **What could go wrong:** one row per risk, with how serious it is, whether it's a known conversion
+3. **What to watch:** one row per risk, with how serious it is, whether it's a known conversion
    behavior, what the scan found, and what to do.
 4. **Decisions needed:** the risks the institution has to decide on.
 5. **Site conversion settings:** site-wide settings that change how every course converts. Agree them

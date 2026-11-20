@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "convscan"
-version = "0.4.0"
+version = "0.4.1"
 description = "Read-only pre- and post-conversion scans and reports for Original-to-Ultra course conversion in Blackboard LMS"
 readme = "README.md"
 requires-python = ">=3.10"

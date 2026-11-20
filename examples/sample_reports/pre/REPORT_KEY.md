@@ -63,7 +63,7 @@ A course can be looked up by any of its three IDs: `/courses/_101_1`, `/courses/
 
 ## Findings
 
-Each finding in a report's "What could go wrong" is one rule applied to one query's rows. The fields below are the ones the rule tests.
+Each finding in a report's "What to watch" is one rule applied to one query's rows. The fields below are the ones the rule tests.
 
 | Finding | Query | Fields tested |
 |---|---|---|
