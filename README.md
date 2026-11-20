@@ -24,10 +24,10 @@ repository tracks Test/Stage releases and records each delta on its
 If the next release isn't published yet, diff against the latest build on bbprepo for an interim list.
 After the release, run `convscan check` on the site.
 
-**Status (2026-11-15):** working, and tested on four real copy-and-convert runs on a demo site (2 to
-10 learners per course). Version 0.2.0 reads learner records one by one only for students in progress,
-and adds rules for over-deep folders and draws from undeployed tests; both changes were checked
-read-only on the demo site. Not yet run on a production site.
+**Status (2026-11-20):** version 0.4.0. Tested on real copy-and-convert runs on a demo site, then run
+read-only on a production site: a batch of about 100 courses with tens of thousands of learners in
+progress, pre-scan and post-scan in under 15 minutes. What changed in each version is under
+[Versions](#versions).
 
 **See it first:** [examples/sample_reports/](examples/sample_reports/) has a pre-conversion report,
 a hand-off report and an ID map for two invented courses, one with typical losses and one clean.
@@ -339,6 +339,46 @@ never end in one (a test checks this). Never write a placeholder with its braces
 Terms (Original, Ultra, DDA, baseline, freeze and the rest) are defined at the end of USER_GUIDE.md.
 The **Reporting Framework** is Blackboard's way to run custom SQL over REST, an alternative runner to
 DDA.
+
+## Versions
+
+The version is set in two places, `pyproject.toml` and `src/convscan/__init__.py`, and every report
+prints it, so a report can be traced to the code that made it. Each release is tagged (`v0.4.0`).
+
+| Change | Bump |
+|---|---|
+| A fix or wording change that doesn't change what the reports find, or their files and columns (a typo in a note, a faster query) | Patch: 0.4.0 to 0.4.1 |
+| New checks or rules, new report content, changed results, or a changed output format (files, CSV columns, query output) | Minor: 0.4.0 to 0.5.0 |
+| The reports and `idmap.csv` are stable enough for others to build on | 1.0.0 |
+
+Bump the version in the commit that makes the change, rebuild the sample reports, and add a line below.
+
+### 0.4.0 (2026-11-20)
+
+- **`idmap.csv` columns changed (breaking):** database names and numeric primary keys only: `table`,
+  `orig_pk1`, `new_pk1`, `orig_course_contents_pk1`, `new_course_contents_pk1`, `orig_batch_uid`,
+  `new_batch_uid`. The `_nnn_1` text form (`orig_id`, `new_id`) is gone. The hand-off report's ID map
+  uses the same columns.
+- **Report key:** every reports folder has a `REPORT_KEY.md` giving the `table.field` behind each value,
+  for the run type, with the REST API's names for the same IDs.
+- **External ID and primary key:** S1 reads `course_main.batch_uid`; both reports show it and
+  `course_main.pk1`.
+- **Hidden grade columns:** S4 reads the attached item's availability. The rule is split in two
+  (attached to an item learners can open, or attached to none), and the hand-off report has a check for
+  columns that learners see with their item.
+- **Matching, from a production run:** folders and learning modules count as one type; titles are
+  decoded and French guillemets handled (also in M2); empty folders, dropped links, undeployed tests and,
+  in copies without students, named-learner conditions read Expected instead of Different. The French
+  weighted total is recognized.
+
+### 0.3.0 (2026-11-18)
+
+New-ID prefix (`new_id_prefix`, `--prefix`), TCP keepalives on the DDA connection, `post --no-reread`.
+
+### 0.2.0 (2026-11-15)
+
+Learner records read one by one only for students in progress (totals for the rest), schema checks,
+rules for over-deep folders and draws from undeployed tests.
 
 ## Where it came from
 
