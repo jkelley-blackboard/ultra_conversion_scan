@@ -346,6 +346,24 @@ def test_items_match_across_content_area_conversion_and_entities():
     assert "Old Area" in checks["Empty folders not carried over"]["note"]
 
 
+def test_ambiguous_columns_share_one_copy_column_in_the_id_map():
+    """Two Original 'Course Home' columns, one in the copy: neither is matched, and the copy's column
+    isn't listed again as new in Ultra."""
+    from convscan.compare import id_map
+    base = {"S1": [{"course_id": "C1", "crs_pk": 1}],
+            "S4": [{"course_id": "C1", "col_pk": 11, "title": "Course Home", "calculated_ind": "N"},
+                   {"course_id": "C1", "col_pk": 12, "title": "Course Home", "calculated_ind": "N"}]}
+    m2 = lambda pk: {"orig_course_id": "C1", "orig_col_pk": pk, "title": "Course Home", "new_col_pk": None,
+                     "match_status": "ambiguous", "candidates": "21"}
+    post = {"S1": [{"course_id": "U-C1", "crs_pk": 2}],
+            "S4": [{"course_id": "U-C1", "col_pk": 21, "title": "Course Home", "calculated_ind": "N"}],
+            "M2": [m2(11), m2(12)]}
+    rows = id_map("C1", "U-C1", base, post)
+    cols = [r for r in rows if r["kind"] == "grade column"]
+    assert [r["match_status"] for r in cols] == ["ambiguous", "ambiguous"]
+    assert all(r["new_pk1"] == "" for r in cols)
+
+
 def test_titles_keep_guillemet_text_and_decode_entities():
     from convscan.compare import norm
     assert norm("Opérations « boîte »") == norm("Opérations < boîte >") == "opérations < boîte >"

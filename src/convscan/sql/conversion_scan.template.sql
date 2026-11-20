@@ -1046,12 +1046,17 @@ ranked as (                                -- tie-break 2: Original columns that
   from grp g)                              -- the copy keeps the columns in the same order
 select o.orig_course_id, o.new_course_id, o.col_pk as orig_col_pk, o.title, o.content_title,
   o.score_provider_handle, o.calculated_ind, o.visible_ind,
+  -- More Original columns share the candidates than the copy has (two 'Course Home' columns with no
+  -- item, one in the copy): at least one has no counterpart, and the data can't say which, so none
+  -- is matched. Checked first, so the same copy column is never given to two Original columns.
   case when r.col_pk is null              then 'not found'
+       when r.n_orig > r.n_cand           then 'ambiguous'
        when r.n_all = 1                   then 'matched'
        when r.n_cand = 1                  then 'matched (visibility tie-break)'
        when r.n_cand = r.n_orig           then 'matched (order tie-break)'
        else 'ambiguous' end                                                   as match_status,
-  case when r.n_cand = 1                  then split_part(r.cand_set, ',', 1)::bigint
+  case when r.n_orig > r.n_cand           then null
+       when r.n_cand = 1                  then split_part(r.cand_set, ',', 1)::bigint
        when r.n_cand = r.n_orig           then split_part(r.cand_set, ',', r.o_rank::int)::bigint
   end                                                                         as new_col_pk,  -- blank when ambiguous
   r.best_level                                                                as match_level,

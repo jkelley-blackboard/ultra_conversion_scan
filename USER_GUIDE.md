@@ -334,7 +334,7 @@ also carries each course's external ID (`orig_batch_uid`, `new_batch_uid`). For 
 |---|---|
 | `matched` | One column in the copy fits |
 | `matched (visibility tie-break)`, `matched (order tie-break)` | Several columns share a title (four "Total" columns, say); paired by visibility, then by creation order |
-| `ambiguous` | More than one candidate and no way to choose. Resolve by hand before hand-off |
+| `ambiguous` | More than one candidate and no way to choose, or more Original columns than candidates in the copy (two "Course Home" columns, one in the copy). `new_pk1` is blank. Resolve by hand before hand-off |
 | `not found` | No column in the copy. Resolve before hand-off |
 | `removed in Ultra (weighted total)` | Ultra drops the weighted total column |
 | `removed in Ultra (default total, nothing graded)` | Ultra drops the default Total column when every column in the course is calculated, so there's nothing to total |

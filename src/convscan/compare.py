@@ -524,7 +524,15 @@ def check_grade_columns(p: Pair):
             p.add("Grades", "Grade columns", ov, nv, EXPECTED,
                   (dropped + " " + note + f"{extra - k} other column(s) are new in Ultra: see the ID map.").strip())
     else:
-        p.add("Grades", "Grade columns", ov, nv, DIFFERENT, "Missing columns are listed in the ID map as not found.")
+        p.add("Grades", "Grade columns", ov, nv, DIFFERENT,
+              "Missing columns are listed in the ID map as not found, or as ambiguous where several Original "
+              "columns share one in the copy.")
+
+
+def _pk(value):
+    """A primary key as the run data holds it: a number when it looks like one."""
+    value = str(value).strip()
+    return int(value) if value.isdigit() else value
 
 
 def _nothing_graded(rows) -> bool:
@@ -973,6 +981,9 @@ def id_map(o: str, n: str, base: dict, post: dict) -> list[dict]:
     mapped = set()
     for m in sorted(column_map(post, o).values(), key=lambda r: r["orig_col_pk"]):
         mapped.add(m.get("new_col_pk"))
+        # An ambiguous column's candidates are accounted for (one of them is its counterpart), so they
+        # aren't listed again as new in Ultra.
+        mapped.update(_pk(c) for c in str(m.get("candidates") or "").split(",") if c.strip())
         status = m.get("match_status", "")
         if status == "not found":
             status = removed.get(_removed_reason(m.get("title"), nothing_graded), status)

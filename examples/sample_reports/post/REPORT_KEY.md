@@ -71,7 +71,7 @@ Titles are compared without HTML tags, entities (`&amp;`, `&quot;`), case, repea
 | `matched` | One column in the copy fits |
 | `matched (visibility tie-break)` | Several fit; one has the same visibility (`gradebook_main.visible_ind` and `visible_in_book_ind`) |
 | `matched (order tie-break)` | Several fit equally; they are paired in creation order (`gradebook_main.pk1`), which the copy keeps |
-| `ambiguous` | Several fit and can't be told apart; `new_pk1` is blank until resolved |
+| `ambiguous` | Several fit and can't be told apart, or several Original columns share fewer candidates in the copy (so at least one has no counterpart); `new_pk1` is blank until resolved |
 | `not found` | No column in the copy fits |
 | `removed in Ultra (weighted total)` | Ultra doesn't keep the Weighted Total column |
 | `removed in Ultra (default total, nothing graded)` | Ultra drops the default Total when nothing in the course is graded |
