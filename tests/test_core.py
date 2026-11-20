@@ -264,6 +264,37 @@ def test_folders_added_by_conversion_should_be_fixed():
     assert "Undeployed tests in a hidden folder" not in {c["check"] for c in p.checks}
 
 
+def test_undeployed_tests_explain_extra_tests_and_questions():
+    """The Original's undeployed tests have no content item, so the copy has more tests and questions:
+    Expected when the extra matches the hidden undeployed-tests folder, Different otherwise."""
+    from convscan.compare import DIFFERENT, EXPECTED, check_content_counts, check_question_types
+    F, T = "resource/x-bb-folder", "resource/x-bb-asmt-test-link"
+    row = lambda c, pk, parent, title, depth, h, avail="Y": {"course_id": c, "content_pk": pk, "parent_pk": parent,
+                                                             "title": title, "depth": depth, "cnthndlr_handle": h,
+                                                             "available_ind": avail}
+    counts = lambda c, tests: {"course_id": c, "items": 5, "tests": tests, "assignments": 0, "scorm": 0,
+                               "forum_links": 0, "lti_items": 0}
+    qtype = lambda c, test, n: {"course_id": c, "test_title": test, "question_type_code": 3, "questions": n}
+    base = {"S3b": [row("C1", 1, 0, "Unit 1", 1, F)], "S3": [counts("C1", 1)], "S5d": [qtype("C1", "Quiz", 10)]}
+    post = {"S3b": [row("U-C1", 11, 10, "Unit 1", 1, F),
+                    row("U-C1", 20, 10, "Undeployed Tests", 1, F, "N"),
+                    row("U-C1", 21, 20, "Draft A", 2, T), row("U-C1", 22, 20, "Draft B", 2, T)],
+            "S3": [counts("U-C1", 3)],
+            "S5d": [qtype("U-C1", "Quiz", 10), qtype("U-C1", "Draft A", 4), qtype("U-C1", "Draft B", 6)]}
+    p = _pair(base, post)
+    check_content_counts(p)
+    check_question_types(p)
+    assert _status(p, "Tests and assignments")["status"] == EXPECTED
+    assert _status(p, "Questions in tests")["status"] == EXPECTED
+    post["S3"] = [counts("U-C1", 4)]                     # one test more than the folder explains
+    post["S5d"].append(qtype("U-C1", "Other", 1))
+    p = _pair(base, post)
+    check_content_counts(p)
+    check_question_types(p)
+    assert _status(p, "Tests and assignments")["status"] == DIFFERENT
+    assert _status(p, "Questions in tests")["status"] == DIFFERENT
+
+
 def test_undeployed_tests_rule_follows_the_bank_setting():
     from convscan.config import PACKAGE
     doc = rules.load_rules(PACKAGE / "rules" / "default.yaml")

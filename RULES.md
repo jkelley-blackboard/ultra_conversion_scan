@@ -125,6 +125,8 @@ These are the checks that give **Expected, should fix**:
 
 Grade columns hidden in the Original get two hand-off checks. "Hidden columns now visible" (marked visible in the copy) gives **Needs action**. "Hidden columns that learners see with their item" gives **Expected**: the copy still marks the column hidden, but it's attached to an item learners can open, and Ultra shows it with the item. The pre-conversion rule "Hidden grade columns that learners will see" lists those in advance.
 
+Undeployed tests have no content item in the Original, so the Original's counts leave them out. When the copy has more tests ("Tests and assignments") or more questions ("Questions in tests") and the extra is exactly what sits in the hidden undeployed-tests folder, those checks give **Expected** and point to "Undeployed tests in a hidden folder", which carries the fix. Any extra beyond the folder stays **Different**.
+
 The hand-off report's "Hidden items now visible to learners" gives **Needs action**: hide them before release. The pre-conversion rule "Items hidden from learners" lists them in advance.
 
 Restructuring that isn't a conversion change, such as removing a content area the Original already

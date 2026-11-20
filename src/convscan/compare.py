@@ -195,6 +195,9 @@ def check_content_counts(p: Pair):
     a, b = dict(_one(p.base, "S3", p.o)), dict(_one(p.post, "S3", p.n))
     for x in (a, b):
         x["tests_assignments"] = (x.get("tests") or 0) + (x.get("assignments") or 0)
+    # The Original's undeployed tests have no content item, so S3 doesn't count them; conversion adds one
+    # for each, in a hidden folder. Those extra tests are expected, not a difference.
+    undeployed = len(undeployed_tests_folder(p)) if p.both("S3b") else 0
     for col, label, exact in (("tests_assignments", "Tests and assignments", True),
                               ("scorm", "SCORM items", True), ("forum_links", "Discussion links", True),
                               ("lti_items", "LTI tool links", True), ("items", "All items", False)):
@@ -203,6 +206,10 @@ def check_content_counts(p: Pair):
             p.add("Content", label, ov, nv, SAME)
         elif not exact and nv > ov:
             p.add("Content", label, ov, nv, EXPECTED, "Conversion adds folders.")
+        elif col == "tests_assignments" and undeployed and nv - ov == undeployed:
+            p.add("Content", label, ov, nv, EXPECTED,
+                  f"The {undeployed} extra test(s) are the Original's undeployed tests, which conversion puts in a "
+                  "hidden folder (see \"Undeployed tests in a hidden folder\").")
         else:
             p.add("Content", label, ov, nv, DIFFERENT)
 
@@ -537,9 +544,21 @@ def check_question_types(p: Pair):
     elif removed and nt == ot - removed:
         p.add("Tests", "Questions in tests", ot, nt, ACTION,
               f"{removed} question(s) of types Ultra doesn't support were removed: replace them.")
+    elif nt > ot and (extra := _undeployed_questions(p, nrows)) and nt - extra == ot:
+        p.add("Tests", "Questions in tests", ot, nt, EXPECTED,
+              f"The {extra} extra question(s) are in the Original's undeployed tests, which conversion puts in a "
+              "hidden folder (see \"Undeployed tests in a hidden folder\").")
     else:
         p.add("Tests", "Questions in tests", ot, nt, DIFFERENT,
               f"{removed} were of types Ultra removes." if removed else "")
+
+
+def _undeployed_questions(p: Pair, nrows: list[dict]) -> int:
+    """Questions in the copy's tests that came from the Original's undeployed tests (matched by title)."""
+    if not p.both("S3b"):
+        return 0
+    titles = {norm(t.get("title")) for t in undeployed_tests_folder(p)}
+    return sum(r.get("questions") or 0 for r in nrows if norm(r.get("test_title")) in titles)
 
 
 def check_test_exceptions(p: Pair):
